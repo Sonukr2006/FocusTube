@@ -1,8 +1,8 @@
 import { useState } from "react";
 import {
   Card,
+  CardAction,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -10,15 +10,34 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Button } from "../ui/button";
 
-const Todoes = () => {
+const Todoes = ({ onAdd, onCancel, isSaving }) => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
 
-  const handleAdd = (event) => {
+  const handleAdd = async (event) => {
     event.preventDefault();
-    if (!title.trim() || !description.trim()) return;
-    setTitle("");
-    setDescription("");
+    const normalizedTitle = title.trim();
+    const normalizedDescription = description.trim();
+
+    if (!normalizedTitle) {
+      alert("Title field is required.");
+      return;
+    }
+
+    if (!normalizedDescription) {
+      alert("Description field is required.");
+      return;
+    }
+
+    const isCreated = await onAdd?.({
+      title: normalizedTitle,
+      description: normalizedDescription,
+    });
+
+    if (isCreated) {
+      setTitle("");
+      setDescription("");
+    }
   };
 
   return (
@@ -28,7 +47,11 @@ const Todoes = () => {
           <CardTitle className="flex items-center justify-center text-lg font-semibold">
             Add Todo
           </CardTitle>
-          
+          <CardAction>
+            <Button type="button" variant="outline" onClick={onCancel}>
+              Cancel
+            </Button>
+          </CardAction>
         </CardHeader>
         <CardContent className="px-3 pt-4 sm:px-6 sm:pt-6">
           <form onSubmit={handleAdd} className="space-y-4">
@@ -52,7 +75,9 @@ const Todoes = () => {
                 onChange={(event) => setDescription(event.target.value)}
               />
             </div>
-            <Button type="submit">Add</Button>
+            <Button type="submit" disabled={isSaving}>
+              {isSaving ? "Saving..." : "Add"}
+            </Button>
           </form>
         </CardContent>
       </Card>

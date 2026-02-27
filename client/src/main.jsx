@@ -9,7 +9,6 @@ import Login from "./components/Login";
 import SignUp from "./components/SignUp";
 import Heros from "./components/Heros";
 import Home from "./Home";
-import Profile from "./components/Profile";
 import Dashboard from "./components/Dashboard";
 import Session from "./components/Session";
 import HomeContent from "./components/HomeContent";
@@ -35,7 +34,7 @@ const router = createBrowserRouter([
     ],
   },
   {
-    path: "/user",
+    path: "/user/:userId",
     element: <App />,
     children: [
       {

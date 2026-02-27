@@ -15,37 +15,38 @@ import {
   SidebarMenuSubItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
-import { Link, NavLink } from "react-router";
+import { Link, NavLink, useParams } from "react-router";
 import Logo from "@/Logo";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 
-// This is sample data.
-const data = {
-  navMain: [
-    {
-      title: "Home",
-      url: "/user",
-    },
-    {
-      title: "Blocker",
-      url: "/user/blocker",
-    },
-    {
-      title: "Sessions",
-      url: "/user/sessions",
-    },
-    {
-      title: "Murmure",
-      url: "#",
-    },
-    {
-      title: "Gemestream",
-      url: "#",
-    },
-  ],
-};
-
 export function AppSidebar({ ...props }) {
+  const { userId } = useParams();
+  const userBasePath = userId ? `/user/${userId}` : "/user";
+  const data = {
+    navMain: [
+      {
+        title: "Home",
+        url: userBasePath,
+      },
+      {
+        title: "Blocker",
+        url: `${userBasePath}/blocker`,
+      },
+      {
+        title: "Sessions",
+        url: `${userBasePath}/sessions`,
+      },
+      {
+        title: "Murmure",
+        url: "#",
+      },
+      {
+        title: "Gemestream",
+        url: "#",
+      },
+    ],
+  };
+
   return (
     <Sidebar {...props}>
       <SidebarHeader>
@@ -101,7 +102,7 @@ export function AppSidebar({ ...props }) {
             <SidebarMenuButton asChild>
               <Link
                 className="h-11"
-                to="/user/profile"
+                to={`${userBasePath}/profile`}
                 rel="noopener noreferrer"
               >
                 Profile

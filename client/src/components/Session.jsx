@@ -6,7 +6,12 @@ import { Button } from "./ui/button";
 
 const YT_IFRAME_API_SRC = "https://www.youtube.com/iframe_api";
 const SAVE_INTERVAL_MS = 10000;
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
+const RAW_API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"
+).replace(/\/$/, "");
+const API_BASE_URL = RAW_API_BASE_URL.endsWith("/api")
+  ? RAW_API_BASE_URL
+  : `${RAW_API_BASE_URL}/api`;
 
 const PLAYER_STATES = {
   ENDED: 0,
@@ -104,9 +109,9 @@ function parseBackendStartIndex(payload) {
 
 async function fetchPlaylistVideos(playlistId) {
   const endpoints = [
-    `${API_BASE_URL}/api/youtube/playlist-videos?playlistId=${encodeURIComponent(playlistId)}`,
-    `${API_BASE_URL}/api/youtube/playlist-items?playlistId=${encodeURIComponent(playlistId)}`,
-    `${API_BASE_URL}/api/playlist-videos?playlistId=${encodeURIComponent(playlistId)}`,
+    `${API_BASE_URL}/youtube/playlist-videos?playlistId=${encodeURIComponent(playlistId)}`,
+    `${API_BASE_URL}/youtube/playlist-items?playlistId=${encodeURIComponent(playlistId)}`,
+    `${API_BASE_URL}/playlist-videos?playlistId=${encodeURIComponent(playlistId)}`,
   ];
 
   let lastError = "Failed to fetch playlist videos from backend.";
