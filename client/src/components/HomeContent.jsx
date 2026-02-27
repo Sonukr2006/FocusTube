@@ -7,7 +7,7 @@ import TodoesList from "./HomesContent/TodoesList.jsx";
 const HomeContent = () => {
     const [showTodoInput, setShowTodoInput] = useState(false);
   return (
-    <div className=" justify-center items-center">
+    <div className="space-y-4 justify-center items-center">
       {showTodoInput ? <Todoes /> : <TodoesList showTodoInput={showTodoInput} setShowTodoInput={setShowTodoInput} />}
     </div>
   );

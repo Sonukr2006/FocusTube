@@ -86,6 +86,22 @@ function normalizeVideoItems(rawItems) {
     .filter((item) => Boolean(item.videoId));
 }
 
+function parseBackendStartIndex(payload) {
+  const candidates = [
+    payload?.startIndex,
+    payload?.startVideoIndex,
+    payload?.initialIndex,
+    payload?.meta?.startIndex,
+  ];
+
+  for (const value of candidates) {
+    const parsed = Number(value);
+    if (Number.isInteger(parsed) && parsed >= 0) return parsed;
+  }
+
+  return 0;
+}
+
 async function fetchPlaylistVideos(playlistId) {
   const endpoints = [
     `${API_BASE_URL}/api/youtube/playlist-videos?playlistId=${encodeURIComponent(playlistId)}`,
@@ -113,6 +129,7 @@ async function fetchPlaylistVideos(playlistId) {
       return {
         videos,
         playlistTitle: payload?.playlistTitle || payload?.title || "YouTube Playlist",
+        startIndex: parseBackendStartIndex(payload),
       };
     } catch {
       lastError = "Unable to connect to backend API.";
@@ -170,6 +187,8 @@ const Session = () => {
   const [playerReady, setPlayerReady] = useState(false);
   const [pendingResumeProgress, setPendingResumeProgress] = useState(null);
   const [lastSavedProgress, setLastSavedProgress] = useState(null);
+  const [isPlaylistCompleted, setIsPlaylistCompleted] = useState(false);
+  const [backendStartIndex, setBackendStartIndex] = useState(0);
 
   const playerRef = useRef(null);
   const saveIntervalRef = useRef(null);
@@ -224,6 +243,7 @@ const Session = () => {
 
     const boundedIndex = ((index % list.length) + list.length) % list.length;
     const video = list[boundedIndex];
+    setIsPlaylistCompleted(false);
     player.loadVideoById({
       videoId: video.videoId,
       startSeconds: Math.max(startSeconds, 0),
@@ -244,6 +264,29 @@ const Session = () => {
     [playerReady, playNow],
   );
 
+  const handlePrevious = useCallback(() => {
+    const list = videosRef.current;
+    if (!list.length) return;
+    startPlayback(currentIndexRef.current - 1, 0);
+  }, [startPlayback]);
+
+  const handleNext = useCallback(() => {
+    const list = videosRef.current;
+    if (!list.length) return;
+    const currentIdx = currentIndexRef.current;
+    if (currentIdx >= list.length - 1) return;
+    startPlayback(currentIdx + 1, 0);
+  }, [startPlayback]);
+
+  const handleReplayPlaylist = useCallback(() => {
+    const currentPlaylistId = playlistIdRef.current;
+    if (!videosRef.current.length) return;
+    clearProgress(currentPlaylistId);
+    setLastSavedProgress(null);
+    setPendingResumeProgress(null);
+    startPlayback(0, 0);
+  }, [startPlayback]);
+
   const handlePlayerStateChange = useCallback(
     (event) => {
       if (event.data === PLAYER_STATES.PAUSED) {
@@ -254,7 +297,15 @@ const Session = () => {
         captureAndSaveProgress();
         const list = videosRef.current;
         if (!list.length) return;
-        const nextIndex = (currentIndexRef.current + 1) % list.length;
+        const currentIdx = currentIndexRef.current;
+        const isLastVideo = currentIdx >= list.length - 1;
+        if (isLastVideo) {
+          clearProgress(playlistIdRef.current);
+          setLastSavedProgress(null);
+          setIsPlaylistCompleted(true);
+          return;
+        }
+        const nextIndex = currentIdx + 1;
         playNow(nextIndex, 0);
       }
     },
@@ -302,17 +353,25 @@ const Session = () => {
       setError("");
       setPendingResumeProgress(null);
       setLastSavedProgress(null);
+      setIsPlaylistCompleted(false);
+      setBackendStartIndex(0);
 
       const payload = await fetchPlaylistVideos(parsedId);
+      const safeStartIndex = Math.min(
+        Math.max(payload.startIndex || 0, 0),
+        Math.max(payload.videos.length - 1, 0),
+      );
       setPlaylistId(parsedId);
       setPlaylistTitle(payload.playlistTitle);
       setVideos(payload.videos);
-      setCurrentIndex(0);
+      setBackendStartIndex(safeStartIndex);
+      setCurrentIndex(safeStartIndex);
     } catch (fetchError) {
       setError(fetchError.message || "Failed to load playlist.");
       setPlaylistId("");
       setPlaylistTitle("");
       setVideos([]);
+      setBackendStartIndex(0);
       setCurrentIndex(0);
     } finally {
       setIsLoading(false);
@@ -339,7 +398,7 @@ const Session = () => {
           return;
         }
 
-        startPlayback(0, 0);
+        startPlayback(backendStartIndex, 0);
       } catch {
         if (!isCancelled) {
           setError("Unable to initialize YouTube player.");
@@ -352,7 +411,7 @@ const Session = () => {
     return () => {
       isCancelled = true;
     };
-  }, [ensurePlayer, playlistId, startPlayback, videos]);
+  }, [backendStartIndex, ensurePlayer, playlistId, startPlayback, videos]);
 
   useEffect(() => {
     if (!playerReady || !playlistId || !videos.length || pendingResumeProgress) return undefined;
@@ -394,6 +453,10 @@ const Session = () => {
     };
   }, [captureAndSaveProgress]);
 
+  const controlsDisabled = !videos.length || Boolean(pendingResumeProgress);
+  const isAtFirstVideo = currentIndex <= 0;
+  const isAtLastVideo = !videos.length || currentIndex >= videos.length - 1;
+
   return (
     <Card className="mx-auto w-full max-w-5xl">
       <CardHeader>
@@ -427,6 +490,9 @@ const Session = () => {
             <p className="font-medium text-foreground">{playlistTitle || "Playlist Loaded"}</p>
             <p>{videos.length} videos found</p>
             {currentVideo ? <p>Now playing: {currentVideo.title}</p> : null}
+            {isPlaylistCompleted ? (
+              <p className="font-medium text-foreground">Playlist completed.</p>
+            ) : null}
           </div>
         ) : null}
 
@@ -471,6 +537,35 @@ const Session = () => {
         <div className="overflow-hidden rounded-lg border">
           <div id="session-youtube-player" className="h-[240px] w-full bg-muted sm:h-[420px]" />
         </div>
+
+        {videos.length ? (
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handlePrevious}
+              disabled={controlsDisabled || isAtFirstVideo}
+            >
+              Previous
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleNext}
+              disabled={controlsDisabled || isAtLastVideo}
+            >
+              Next
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={handleReplayPlaylist}
+              disabled={controlsDisabled}
+            >
+              Replay Playlist
+            </Button>
+          </div>
+        ) : null}
 
         {videos.length ? (
           <div className="space-y-2">

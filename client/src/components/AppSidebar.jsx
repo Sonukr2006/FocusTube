@@ -28,7 +28,7 @@ const data = {
     },
     {
       title: "Blocker",
-      url: "#",
+      url: "/user/blocker",
     },
     {
       title: "Sessions",

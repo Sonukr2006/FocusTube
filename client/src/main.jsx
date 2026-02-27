@@ -13,6 +13,7 @@ import Profile from "./components/Profile";
 import Dashboard from "./components/Dashboard";
 import Session from "./components/Session";
 import HomeContent from "./components/HomeContent";
+import Blocker from "./components/Blocker/Blocker";
 
 const router = createBrowserRouter([
   {
@@ -38,18 +39,25 @@ const router = createBrowserRouter([
     element: <App />,
     children: [
       {
-        index: true,
-        element: <Home><HomeContent /></Home>,
-      },
-      {
-        // path: "/user/profile/:userId",
-        path: "profile",
-        element: <Home><Dashboard /></Home>,
-      },
-      {
-        // path: "/user/profile/:userId/sessions",
-        path: "/user/sessions",
-        element: <Home><Session /></Home>,
+        element: <Home />,
+        children: [
+          {
+            index: true,
+            element: <HomeContent />,
+          },
+          {
+            path: "profile",
+            element: <Dashboard />,
+          },
+          {
+            path: "sessions",
+            element: <Session />,
+          },
+          {
+            path: "blocker",
+            element: <Blocker />,
+          },
+        ],
       },
     ],
   },

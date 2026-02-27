@@ -14,8 +14,12 @@ import {
   SidebarTrigger,
 } from "./components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "./components/ui/avatar";
-import { Link } from "react-router";
+import { Link, Outlet, useLocation } from "react-router";
+import StudyTimer from "./components/StudyTimer";
 export default function Home({children}) {
+  const location = useLocation();
+  const isHomePage = location.pathname === "/user" || location.pathname === "/user/";
+
   return (
     <SidebarProvider className="min-h-full">
       <AppSidebar className="top-14 h-[calc(100svh-3.5rem)]" />
@@ -37,7 +41,7 @@ export default function Home({children}) {
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
-          <Link to="/profile" className="ml-auto" size="lg">
+          <Link to="/user/profile" className="ml-auto" size="lg">
           <Avatar size="xl">
             <AvatarImage src="https://github.com/shadcn.png" />
             <AvatarFallback>CN</AvatarFallback>
@@ -45,14 +49,23 @@ export default function Home({children}) {
           </Link>
         </header> 
         <div className="flex flex-1 flex-col gap-4 p-4">
+          {isHomePage ? <StudyTimer interactive /> : null}
           {/* <div className="grid auto-rows-min gap-4 md:grid-cols-3">
             <div className="bg-muted/50 aspect-video rounded-xl" />
             <div className="bg-muted/50 aspect-video rounded-xl" />
             <div className="bg-muted/50 aspect-video rounded-xl" />
           </div>
           <div className="bg-muted/50 min-h-[100vh] flex-1 rounded-xl md:min-h-min" /> */}
-          {children}
+          {children || <Outlet />}
         </div>
+
+        {!isHomePage ? (
+          <div className="pointer-events-none fixed right-4 top-16 z-50 w-[min(300px,calc(100vw-2rem))]">
+            <div className="pointer-events-auto">
+              <StudyTimer interactive={false} compact />
+            </div>
+          </div>
+        ) : null}
       </SidebarInset>
     </SidebarProvider>
   );
