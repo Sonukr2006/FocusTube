@@ -1,6 +1,6 @@
-import { IconTrendingDown, IconTrendingUp } from "@tabler/icons-react"
+import { IconClockHour4, IconListCheck, IconPlayerPlay, IconVideo } from "@tabler/icons-react";
 
-import { Badge } from "@/components/ui/badge"
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardAction,
@@ -8,94 +8,93 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
+} from "@/components/ui/card";
 
-export function SectionCards() {
+const formatPercent = (value) => `${Math.max(0, Math.min(100, Number(value) || 0)).toFixed(1)}%`;
+
+export function SectionCards({ metrics, isLoading = false }) {
+  const safeMetrics = metrics || {
+    lectureCompleted: 0,
+    lectureTotal: 0,
+    lectureCompletionRate: 0,
+    todoCompleted: 0,
+    todoTotal: 0,
+    todoCompletionRate: 0,
+    timerCompletedSessions: 0,
+    timerCompletedMinutes: 0,
+    timerStartedSessions: 0,
+  };
+
   return (
-    <div
-      className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
-      <Card className="@container/card">
+    <div className="grid grid-cols-1 gap-4 px-4 lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-3">
+      <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
         <CardHeader>
-          <CardDescription>Total Revenue</CardDescription>
+          <CardDescription>Lecture Completion</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            $1,250.00
+            {isLoading ? "Loading..." : formatPercent(safeMetrics.lectureCompletionRate)}
           </CardTitle>
           <CardAction>
             <Badge variant="outline">
-              <IconTrendingUp />
-              +12.5%
+              <IconVideo />
+              {safeMetrics.lectureCompleted}/{safeMetrics.lectureTotal || 0}
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Trending up this month <IconTrendingUp className="size-4" />
+            Completed playlists tracked
           </div>
           <div className="text-muted-foreground">
-            Visitors for the last 6 months
+            Based on your saved session history.
           </div>
         </CardFooter>
       </Card>
-      <Card className="@container/card">
+
+      <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
         <CardHeader>
-          <CardDescription>New Customers</CardDescription>
+          <CardDescription>Todo Completion</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            1,234
+            {isLoading ? "Loading..." : formatPercent(safeMetrics.todoCompletionRate)}
           </CardTitle>
           <CardAction>
             <Badge variant="outline">
-              <IconTrendingDown />
-              -20%
+              <IconListCheck />
+              {safeMetrics.todoCompleted}/{safeMetrics.todoTotal || 0}
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Down 20% this period <IconTrendingDown className="size-4" />
+            Completed todos in your account
           </div>
           <div className="text-muted-foreground">
-            Acquisition needs attention
+            Live status from your todo list.
           </div>
         </CardFooter>
       </Card>
-      <Card className="@container/card">
+
+      <Card className="@container/card bg-gradient-to-t from-primary/5 to-card shadow-xs">
         <CardHeader>
-          <CardDescription>Active Accounts</CardDescription>
+          <CardDescription>Focus Timer Usage</CardDescription>
           <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            45,678
+            {isLoading
+              ? "Loading..."
+              : `${Math.max(0, Number(safeMetrics.timerCompletedMinutes) || 0)} min`}
           </CardTitle>
           <CardAction>
             <Badge variant="outline">
-              <IconTrendingUp />
-              +12.5%
+              <IconClockHour4 />
+              {safeMetrics.timerCompletedSessions} sessions
             </Badge>
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
           <div className="line-clamp-1 flex gap-2 font-medium">
-            Strong user retention <IconTrendingUp className="size-4" />
+            Timer sessions completed <IconPlayerPlay className="size-4" />
           </div>
-          <div className="text-muted-foreground">Engagement exceed targets</div>
-        </CardFooter>
-      </Card>
-      <Card className="@container/card">
-        <CardHeader>
-          <CardDescription>Growth Rate</CardDescription>
-          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-            4.5%
-          </CardTitle>
-          <CardAction>
-            <Badge variant="outline">
-              <IconTrendingUp />
-              +4.5%
-            </Badge>
-          </CardAction>
-        </CardHeader>
-        <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="line-clamp-1 flex gap-2 font-medium">
-            Steady performance increase <IconTrendingUp className="size-4" />
+          <div className="text-muted-foreground">
+            Started: {safeMetrics.timerStartedSessions} sessions total.
           </div>
-          <div className="text-muted-foreground">Meets growth projections</div>
         </CardFooter>
       </Card>
     </div>

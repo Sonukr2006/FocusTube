@@ -59,15 +59,35 @@ const getPlaylistItems = async (playlistId, apiKey) => {
   return items;
 };
 
+const getVideoItem = async (videoId, apiKey) => {
+  const url =
+    `${YT_API_BASE_URL}/videos?part=snippet&id=${encodeURIComponent(videoId)}` +
+    `&key=${encodeURIComponent(apiKey)}`;
+
+  const payload = await fetchJson(url);
+  const firstItem = payload?.items?.[0];
+  const title = firstItem?.snippet?.title || "";
+
+  if (!firstItem) {
+    return null;
+  }
+
+  return {
+    videoId,
+    title: title || `Video ${videoId}`,
+  };
+};
+
 export const getPlaylistVideos = async (req, res) => {
   try {
     const playlistId = req.query.playlistId?.trim();
+    const videoId = req.query.videoId?.trim();
     const apiKey = process.env.YOUTUBE_API_KEY?.trim();
 
-    if (!playlistId) {
+    if (!playlistId && !videoId) {
       return res.status(400).json({
         success: false,
-        message: "playlistId query parameter is required",
+        message: "playlistId or videoId query parameter is required",
       });
     }
 
@@ -78,27 +98,47 @@ export const getPlaylistVideos = async (req, res) => {
       });
     }
 
-    const [playlistTitle, items] = await Promise.all([
-      getPlaylistTitle(playlistId, apiKey),
-      getPlaylistItems(playlistId, apiKey),
-    ]);
+    if (playlistId) {
+      const [playlistTitle, items] = await Promise.all([
+        getPlaylistTitle(playlistId, apiKey),
+        getPlaylistItems(playlistId, apiKey),
+      ]);
 
-    if (!items.length) {
+      if (!items.length) {
+        return res.status(404).json({
+          success: false,
+          message: "No videos found for this playlist",
+        });
+      }
+
+      return res.status(200).json({
+        playlistTitle,
+        items,
+        startIndex: 0,
+        sourceType: "playlist",
+        sourceId: playlistId,
+      });
+    }
+
+    const item = await getVideoItem(videoId, apiKey);
+    if (!item) {
       return res.status(404).json({
         success: false,
-        message: "No videos found for this playlist",
+        message: "Video not found",
       });
     }
 
     return res.status(200).json({
-      playlistTitle,
-      items,
+      playlistTitle: item.title || "Single Video",
+      items: [item],
       startIndex: 0,
+      sourceType: "video",
+      sourceId: `video:${videoId}`,
     });
   } catch (error) {
     return res.status(502).json({
       success: false,
-      message: "Failed to fetch playlist videos from YouTube Data API",
+      message: "Failed to fetch data from YouTube Data API",
       error: error.message,
     });
   }

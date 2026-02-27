@@ -171,7 +171,7 @@ export default function Home({children}) {
             }
           >
             <div
-              className="mb-1 cursor-move select-none rounded-md border border-border bg-card px-3 py-1 text-xs text-muted-foreground shadow-sm"
+              className="m-10 mb-0 cursor-move select-none rounded-md border border-border bg-card px-3 py-1 text-xs text-muted-foreground shadow-sm"
               onMouseDown={handleDragStartMouse}
               onTouchStart={handleDragStartTouch}
             >

@@ -25,18 +25,116 @@ const PLAYER_STATES = {
 
 let ytApiPromise;
 
-function extractPlaylistId(value) {
+function parseYoutubeInput(value) {
   const input = value.trim();
-  if (!input) return "";
+  if (!input) return null;
 
-  if (!input.includes("http")) return input;
+  if (/^video:[\w-]{6,}$/.test(input)) {
+    const videoId = input.slice("video:".length);
+    return {
+      kind: "video",
+      sourceId: videoId,
+      sessionId: `video:${videoId}`,
+      normalizedInput: input,
+    };
+  }
+
+  if (!input.includes("http")) {
+    if (/^(PL|UU|LL|RD|FL|OLAK5uy)[\w-]+$/.test(input)) {
+      return {
+        kind: "playlist",
+        sourceId: input,
+        sessionId: input,
+        normalizedInput: input,
+      };
+    }
+
+    if (/^[\w-]{11}$/.test(input)) {
+      return {
+        kind: "video",
+        sourceId: input,
+        sessionId: `video:${input}`,
+        normalizedInput: input,
+      };
+    }
+
+    return {
+      kind: "playlist",
+      sourceId: input,
+      sessionId: input,
+      normalizedInput: input,
+    };
+  }
 
   try {
     const url = new URL(input);
-    return url.searchParams.get("list") || "";
+    const playlistId = url.searchParams.get("list") || "";
+    if (playlistId) {
+      return {
+        kind: "playlist",
+        sourceId: playlistId,
+        sessionId: playlistId,
+        normalizedInput: input,
+      };
+    }
+
+    const videoParamId = url.searchParams.get("v") || "";
+    if (videoParamId) {
+      return {
+        kind: "video",
+        sourceId: videoParamId,
+        sessionId: `video:${videoParamId}`,
+        normalizedInput: input,
+      };
+    }
+
+    const hostname = url.hostname.replace(/^www\./, "");
+    const pathParts = url.pathname.split("/").filter(Boolean);
+    if (hostname === "youtu.be" && pathParts[0]) {
+      return {
+        kind: "video",
+        sourceId: pathParts[0],
+        sessionId: `video:${pathParts[0]}`,
+        normalizedInput: input,
+      };
+    }
+
+    if ((pathParts[0] === "shorts" || pathParts[0] === "embed") && pathParts[1]) {
+      return {
+        kind: "video",
+        sourceId: pathParts[1],
+        sessionId: `video:${pathParts[1]}`,
+        normalizedInput: input,
+      };
+    }
   } catch {
-    return "";
+    return null;
   }
+
+  return null;
+}
+
+function resolveTargetFromSessionKey(sessionKey, fallbackVideoId = "") {
+  const safeKey = (sessionKey || "").trim();
+  if (!safeKey) return null;
+
+  if (safeKey.startsWith("video:")) {
+    const rawVideoId = safeKey.slice("video:".length) || fallbackVideoId;
+    if (!rawVideoId) return null;
+    return {
+      kind: "video",
+      sourceId: rawVideoId,
+      sessionId: `video:${rawVideoId}`,
+      normalizedInput: rawVideoId,
+    };
+  }
+
+  return {
+    kind: "playlist",
+    sourceId: safeKey,
+    sessionId: safeKey,
+    normalizedInput: safeKey,
+  };
 }
 
 function getProgressStorageKey(playlistId) {
@@ -122,14 +220,22 @@ function pickLatestProgress(localProgress, remoteProgress) {
     : localProgress;
 }
 
-async function fetchPlaylistVideos(playlistId) {
+async function fetchPlaylistVideos(target) {
+  const query =
+    target.kind === "video"
+      ? `videoId=${encodeURIComponent(target.sourceId)}`
+      : `playlistId=${encodeURIComponent(target.sourceId)}`;
+
   const endpoints = [
-    `${API_BASE_URL}/youtube/playlist-videos?playlistId=${encodeURIComponent(playlistId)}`,
-    `${API_BASE_URL}/youtube/playlist-items?playlistId=${encodeURIComponent(playlistId)}`,
-    `${API_BASE_URL}/playlist-videos?playlistId=${encodeURIComponent(playlistId)}`,
+    `${API_BASE_URL}/youtube/playlist-videos?${query}`,
+    `${API_BASE_URL}/youtube/playlist-items?${query}`,
+    `${API_BASE_URL}/playlist-videos?${query}`,
   ];
 
-  let lastError = "Failed to fetch playlist videos from backend.";
+  let lastError =
+    target.kind === "video"
+      ? "Failed to fetch video from backend."
+      : "Failed to fetch playlist videos from backend.";
 
   for (const endpoint of endpoints) {
     try {
@@ -148,8 +254,12 @@ async function fetchPlaylistVideos(playlistId) {
 
       return {
         videos,
-        playlistTitle: payload?.playlistTitle || payload?.title || "YouTube Playlist",
+        playlistTitle:
+          payload?.playlistTitle ||
+          payload?.title ||
+          (target.kind === "video" ? "Single Video" : "YouTube Playlist"),
         startIndex: parseBackendStartIndex(payload),
+        sessionId: payload?.sourceId || target.sessionId,
       };
     } catch {
       lastError = "Unable to connect to backend API.";
@@ -432,7 +542,7 @@ const Session = () => {
     });
   }, [handlePlayerStateChange, playNow]);
 
-  const loadPlaylistById = useCallback(async (parsedId) => {
+  const loadTarget = useCallback(async (target) => {
     try {
       setIsLoading(true);
       setError("");
@@ -440,19 +550,19 @@ const Session = () => {
       setIsPlaylistCompleted(false);
       setBackendStartIndex(0);
 
-      const payload = await fetchPlaylistVideos(parsedId);
+      const payload = await fetchPlaylistVideos(target);
       const safeStartIndex = Math.min(
         Math.max(payload.startIndex || 0, 0),
         Math.max(payload.videos.length - 1, 0)
       );
 
-      setPlaylistId(parsedId);
+      setPlaylistId(payload.sessionId || target.sessionId);
       setPlaylistTitle(payload.playlistTitle);
       setVideos(payload.videos);
       setBackendStartIndex(safeStartIndex);
       setCurrentIndex(safeStartIndex);
     } catch (fetchError) {
-      setError(fetchError.message || "Failed to load playlist.");
+      setError(fetchError.message || "Failed to load content.");
       setPlaylistId("");
       setPlaylistTitle("");
       setVideos([]);
@@ -465,19 +575,23 @@ const Session = () => {
 
   const handleLoadPlaylist = async (event) => {
     event.preventDefault();
-    const parsedId = extractPlaylistId(playlistInput);
-    if (!parsedId) {
-      setError("Please enter a valid YouTube playlist URL or playlist ID.");
+    const parsedTarget = parseYoutubeInput(playlistInput);
+    if (!parsedTarget) {
+      setError("Please enter a valid YouTube playlist/video URL or ID.");
       return;
     }
 
-    await loadPlaylistById(parsedId);
+    await loadTarget(parsedTarget);
   };
 
   useEffect(() => {
     const resumeData = location.state?.resumeSession;
-    const resumePlaylistId = extractPlaylistId(resumeData?.playlistId || "");
-    if (!resumePlaylistId) return;
+    const resumeSessionKey = (resumeData?.playlistId || "").trim();
+    const resumeTarget = resolveTargetFromSessionKey(
+      resumeSessionKey,
+      resumeData?.videoId || ""
+    );
+    if (!resumeTarget) return;
     if (handledLocationKeyRef.current === location.key) return;
 
     if (!isValidUserSession) {
@@ -493,10 +607,10 @@ const Session = () => {
 
     handledLocationKeyRef.current = location.key;
 
-    setPlaylistInput(resumePlaylistId);
+    setPlaylistInput(resumeTarget.normalizedInput || resumeTarget.sourceId);
 
     const resumeProgress = {
-      playlistId: resumePlaylistId,
+      playlistId: resumeTarget.sessionId,
       playlistTitle: resumeData?.playlistTitle || "YouTube Playlist",
       videoId: resumeData?.videoId || "",
       lastVideoTitle: resumeData?.lastVideoTitle || "",
@@ -506,9 +620,9 @@ const Session = () => {
       updatedAt: resumeData?.updatedAt || new Date().toISOString(),
     };
 
-    saveProgress(resumePlaylistId, resumeProgress);
-    void loadPlaylistById(resumePlaylistId);
-  }, [authenticatedUserId, isValidUserSession, loadPlaylistById, location.key, location.state]);
+    saveProgress(resumeTarget.sessionId, resumeProgress);
+    void loadTarget(resumeTarget);
+  }, [authenticatedUserId, isValidUserSession, loadTarget, location.key, location.state]);
 
   useEffect(() => {
     if (!playlistId || !videos.length) return;
@@ -615,18 +729,18 @@ const Session = () => {
       <CardHeader>
         <CardTitle>YouTube Session</CardTitle>
         <CardDescription>
-          Paste playlist URL, fetch videos from backend API, and continue exactly where you left off.
+          Paste playlist or single-video URL/ID, then continue exactly where you left off.
         </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-4">
         <form onSubmit={handleLoadPlaylist} className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="w-full space-y-2">
-            <Label htmlFor="playlist-url">Playlist URL</Label>
+            <Label htmlFor="playlist-url">Playlist / Video</Label>
             <Input
               id="playlist-url"
               type="text"
-              placeholder="https://www.youtube.com/playlist?list=..."
+              placeholder="Playlist URL/ID or Video URL/ID"
               value={playlistInput}
               onChange={(event) => setPlaylistInput(event.target.value)}
             />

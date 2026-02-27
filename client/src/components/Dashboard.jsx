@@ -5,9 +5,10 @@ import { DataTable } from "./data-table";
 import { SectionCards } from "./section-cards";
 import { SidebarInset, SidebarProvider } from "./ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import data from "../app/dashboard/data.json";
 import { getUserProfile } from "@/lib/users";
 import { getSessionHistory } from "@/lib/sessionProgress";
+import { getTodos } from "@/lib/todos";
+import { loadTimerAnalytics } from "@/lib/timerAnalytics";
 import { Button } from "./ui/button";
 
 export default function Dashboard() {
@@ -20,6 +21,10 @@ export default function Dashboard() {
   const [history, setHistory] = useState([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [historyError, setHistoryError] = useState("");
+  const [todos, setTodos] = useState([]);
+  const [isLoadingTodos, setIsLoadingTodos] = useState(true);
+  const [todoError, setTodoError] = useState("");
+  const [timerAnalytics, setTimerAnalytics] = useState({});
   const storedUser = useMemo(() => {
     const rawUser = localStorage.getItem("focustube_user");
     if (!rawUser) return null;
@@ -73,7 +78,7 @@ export default function Dashboard() {
       try {
         setHistoryError("");
         setIsLoadingHistory(true);
-        const response = await getSessionHistory(8);
+        const response = await getSessionHistory(50);
         setHistory(Array.isArray(response?.data) ? response.data : []);
       } catch (error) {
         setHistoryError(error.message || "Unable to load session history.");
@@ -84,6 +89,126 @@ export default function Dashboard() {
 
     fetchHistory();
   }, [isValidUserSession, userId]);
+
+  useEffect(() => {
+    const fetchTodosForUser = async () => {
+      if (!isValidUserSession) {
+        setTodos([]);
+        setTodoError("Invalid user session. Please login again.");
+        setIsLoadingTodos(false);
+        return;
+      }
+
+      try {
+        setTodoError("");
+        setIsLoadingTodos(true);
+        const response = await getTodos();
+        setTodos(Array.isArray(response?.data) ? response.data : []);
+      } catch (error) {
+        setTodoError(error.message || "Unable to load todos.");
+      } finally {
+        setIsLoadingTodos(false);
+      }
+    };
+
+    fetchTodosForUser();
+  }, [isValidUserSession, userId]);
+
+  useEffect(() => {
+    if (!authenticatedUserId || !isValidUserSession) {
+      setTimerAnalytics({});
+      return;
+    }
+
+    const syncTimerAnalytics = () => {
+      setTimerAnalytics(loadTimerAnalytics(authenticatedUserId));
+    };
+
+    syncTimerAnalytics();
+
+    const handleAnalyticsUpdate = (event) => {
+      const eventUserId = event?.detail?.userId ? String(event.detail.userId) : "";
+      if (eventUserId && eventUserId !== authenticatedUserId) return;
+      syncTimerAnalytics();
+    };
+
+    window.addEventListener(
+      "focustube:timer-analytics-updated",
+      handleAnalyticsUpdate
+    );
+    window.addEventListener("storage", syncTimerAnalytics);
+
+    return () => {
+      window.removeEventListener(
+        "focustube:timer-analytics-updated",
+        handleAnalyticsUpdate
+      );
+      window.removeEventListener("storage", syncTimerAnalytics);
+    };
+  }, [authenticatedUserId, isValidUserSession]);
+
+  const dashboardMetrics = useMemo(() => {
+    const lectureTotal = history.length;
+    const lectureCompleted = history.filter((item) => item?.isCompleted).length;
+    const lectureCompletionRate = lectureTotal
+      ? (lectureCompleted / lectureTotal) * 100
+      : 0;
+
+    const todoTotal = todos.length;
+    const todoCompleted = todos.filter((item) => item?.completed).length;
+    const todoCompletionRate = todoTotal ? (todoCompleted / todoTotal) * 100 : 0;
+
+    const timerSummary = Object.values(timerAnalytics || {}).reduce(
+      (accumulator, bucket) => ({
+        timerStartedSessions:
+          accumulator.timerStartedSessions +
+          Math.max(0, Number(bucket?.startedSessions) || 0),
+        timerCompletedSessions:
+          accumulator.timerCompletedSessions +
+          Math.max(0, Number(bucket?.completedSessions) || 0),
+        timerCompletedMinutes:
+          accumulator.timerCompletedMinutes +
+          Math.max(0, Number(bucket?.completedMinutes) || 0),
+      }),
+      {
+        timerStartedSessions: 0,
+        timerCompletedSessions: 0,
+        timerCompletedMinutes: 0,
+      }
+    );
+
+    return {
+      lectureCompleted,
+      lectureTotal,
+      lectureCompletionRate,
+      todoCompleted,
+      todoTotal,
+      todoCompletionRate,
+      timerStartedSessions: timerSummary.timerStartedSessions,
+      timerCompletedSessions: timerSummary.timerCompletedSessions,
+      timerCompletedMinutes: timerSummary.timerCompletedMinutes,
+    };
+  }, [history, timerAnalytics, todos]);
+
+  const outlineTodoRows = useMemo(() => {
+    if (!isValidUserSession) return [];
+
+    return (todos || []).map((todo, index) => {
+      const createdDate = Date.parse(todo?.createdAt || "")
+        ? new Date(todo.createdAt).toLocaleDateString()
+        : "-";
+
+      return {
+        id: todo?._id || `todo-${index + 1}`,
+        header: todo?.title || "Untitled todo",
+        type: "Todo",
+        status: todo?.completed ? "Done" : "In Process",
+        target: createdDate,
+        limit: todo?.description?.trim() || "-",
+        reviewer: "Self",
+      };
+    });
+  }, [isValidUserSession, todos]);
 
   const formatWatchTime = (seconds) => {
     const safeSeconds = Math.max(0, Number(seconds) || 0);
@@ -97,6 +222,8 @@ export default function Dashboard() {
     if (Number.isNaN(timestamp)) return "Unknown";
     return new Date(timestamp).toLocaleString();
   };
+
+  const recentHistory = history.slice(0, 8);
 
   const handleResumeSession = (item) => {
     if (!isValidUserSession || !item?.playlistId) {
@@ -170,8 +297,8 @@ export default function Dashboard() {
                         No session history yet. Start a playlist in Session tab.
                       </p>
                     ) : null}
-                    {!isLoadingHistory && !historyError && history.length
-                      ? history.map((item) => {
+                    {!isLoadingHistory && !historyError && recentHistory.length
+                      ? recentHistory.map((item) => {
                           const ownerUserId = item?.userId ? String(item.userId) : "";
                           const isOwnerMatch = !ownerUserId || ownerUserId === routeUserId;
 
@@ -221,11 +348,24 @@ export default function Dashboard() {
                   </CardContent>
                 </Card>
               </div>
-              <SectionCards />
+              {todoError ? (
+                <div className="px-4 lg:px-6">
+                  <p className="text-sm text-destructive">{todoError}</p>
+                </div>
+              ) : null}
+              <SectionCards
+                metrics={dashboardMetrics}
+                isLoading={isLoadingHistory || isLoadingTodos}
+              />
               <div className="px-4 lg:px-6">
-                <ChartAreaInteractive />
+                <ChartAreaInteractive
+                  sessionHistory={history}
+                  todos={todos}
+                  timerAnalytics={timerAnalytics}
+                  isLoading={isLoadingHistory || isLoadingTodos}
+                />
               </div>
-              <DataTable data={data} />
+              <DataTable data={outlineTodoRows} />
             </div>
           </div>
         </div>

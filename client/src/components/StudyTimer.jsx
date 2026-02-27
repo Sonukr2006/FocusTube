@@ -1,11 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
+import {
+  getStoredUserId,
+  loadTimerState,
+  recordTimerSessionCompleted,
+  recordTimerSessionStarted,
+  saveTimerState,
+} from "@/lib/timerAnalytics";
 
 const QUICK_DURATIONS = [30, 45, 60];
-const TIMER_STORAGE_KEY = "studyTimer";
 
 function formatTime(totalSeconds) {
   const safeSeconds = Math.max(0, totalSeconds);
@@ -14,31 +20,11 @@ function formatTime(totalSeconds) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-// localStorage se timer state load kare
-function loadTimerState() {
-  try {
-    const stored = localStorage.getItem(TIMER_STORAGE_KEY);
-    if (stored) {
-      return JSON.parse(stored);
-    }
-  } catch (error) {
-    console.error("Failed to load timer state:", error);
-  }
-  return { timeLeftSec: 0, isRunning: false, isCompleted: false };
-}
-
-// localStorage me timer state save kare
-function saveTimerState(state) {
-  try {
-    localStorage.setItem(TIMER_STORAGE_KEY, JSON.stringify(state));
-  } catch (error) {
-    console.error("Failed to save timer state:", error);
-  }
-}
-
 const StudyTimer = ({ interactive = true, compact = false }) => {
+  const activeUserId = useMemo(() => getStoredUserId(), []);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [timeLeftSec, setTimeLeftSec] = useState(0);
+  const [targetSec, setTargetSec] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const [customMinutes, setCustomMinutes] = useState("");
   const [isCompleted, setIsCompleted] = useState(false);
@@ -46,23 +32,25 @@ const StudyTimer = ({ interactive = true, compact = false }) => {
 
   // Page load ke time localStorage se state restore kare
   useEffect(() => {
-    const savedState = loadTimerState();
+    const savedState = loadTimerState(activeUserId);
     setTimeLeftSec(savedState.timeLeftSec);
+    setTargetSec(savedState.targetSec || savedState.timeLeftSec || 0);
     setIsRunning(savedState.isRunning);
     setIsCompleted(savedState.isCompleted);
     setIsLoaded(true);
-  }, []);
+  }, [activeUserId]);
 
   // Jab bhi timer state change ho to localStorage update kare
   useEffect(() => {
     if (!isLoaded) return;
-    
-    saveTimerState({
+
+    saveTimerState(activeUserId, {
       timeLeftSec,
+      targetSec,
       isRunning,
       isCompleted,
     });
-  }, [timeLeftSec, isRunning, isCompleted, isLoaded]);
+  }, [activeUserId, isCompleted, isLoaded, isRunning, targetSec, timeLeftSec]);
 
   const startCountdown = (minutes) => {
     const parsedMinutes = Number(minutes);
@@ -71,8 +59,10 @@ const StudyTimer = ({ interactive = true, compact = false }) => {
 
     setIsCompleted(false);
     setTimeLeftSec(totalSeconds);
+    setTargetSec(totalSeconds);
     setIsRunning(true);
     setIsPickerOpen(false);
+    recordTimerSessionStarted(activeUserId, safeMinutes);
   };
 
   const handlePause = () => {
@@ -88,6 +78,7 @@ const StudyTimer = ({ interactive = true, compact = false }) => {
   const handleReset = () => {
     setIsRunning(false);
     setTimeLeftSec(0);
+    setTargetSec(0);
     setIsCompleted(false);
   };
 
@@ -100,6 +91,11 @@ const StudyTimer = ({ interactive = true, compact = false }) => {
           window.clearInterval(intervalId);
           setIsRunning(false);
           setIsCompleted(true);
+          const completedMinutes = Math.max(
+            1,
+            Math.floor((targetSec || previous || 0) / 60)
+          );
+          recordTimerSessionCompleted(activeUserId, completedMinutes);
           return 0;
         }
         return previous - 1;
@@ -109,7 +105,7 @@ const StudyTimer = ({ interactive = true, compact = false }) => {
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [isRunning]);
+  }, [activeUserId, isRunning, targetSec]);
 
   const hasTimerValue = timeLeftSec > 0;
   
@@ -120,7 +116,7 @@ const StudyTimer = ({ interactive = true, compact = false }) => {
 
   return (
     <>
-      <Card className="w-full">
+      <Card className="w-fullm m-10 mt-0">
         <CardHeader className={compact ? "space-y-1 pb-2" : "space-y-1"}>
           <CardTitle className={compact ? "text-base" : undefined}>Study Timer</CardTitle>
           <CardDescription>
@@ -231,7 +227,7 @@ const StudyTimer = ({ interactive = true, compact = false }) => {
         </div>
       ) : null}
 
-      {isCompleted ? <p className="mt-2 text-sm font-medium text-foreground">Time is up (00:00).</p> : null}
+      
     </>
   );
 };
