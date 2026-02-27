@@ -5,6 +5,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 
 const QUICK_DURATIONS = [30, 45, 60];
+const TIMER_STORAGE_KEY = "studyTimer";
 
 function formatTime(totalSeconds) {
   const safeSeconds = Math.max(0, totalSeconds);
@@ -13,12 +14,55 @@ function formatTime(totalSeconds) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+// localStorage se timer state load kare
+function loadTimerState() {
+  try {
+    const stored = localStorage.getItem(TIMER_STORAGE_KEY);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch (error) {
+    console.error("Failed to load timer state:", error);
+  }
+  return { timeLeftSec: 0, isRunning: false, isCompleted: false };
+}
+
+// localStorage me timer state save kare
+function saveTimerState(state) {
+  try {
+    localStorage.setItem(TIMER_STORAGE_KEY, JSON.stringify(state));
+  } catch (error) {
+    console.error("Failed to save timer state:", error);
+  }
+}
+
 const StudyTimer = ({ interactive = true, compact = false }) => {
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [timeLeftSec, setTimeLeftSec] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const [customMinutes, setCustomMinutes] = useState("");
   const [isCompleted, setIsCompleted] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // Page load ke time localStorage se state restore kare
+  useEffect(() => {
+    const savedState = loadTimerState();
+    setTimeLeftSec(savedState.timeLeftSec);
+    setIsRunning(savedState.isRunning);
+    setIsCompleted(savedState.isCompleted);
+    setIsLoaded(true);
+  }, []);
+
+  // Jab bhi timer state change ho to localStorage update kare
+  useEffect(() => {
+    if (!isLoaded) return;
+    
+    saveTimerState({
+      timeLeftSec,
+      isRunning,
+      isCompleted,
+    });
+  }, [timeLeftSec, isRunning, isCompleted, isLoaded]);
 
   const startCountdown = (minutes) => {
     const parsedMinutes = Number(minutes);
@@ -68,6 +112,12 @@ const StudyTimer = ({ interactive = true, compact = false }) => {
   }, [isRunning]);
 
   const hasTimerValue = timeLeftSec > 0;
+  
+  // Jab tak localStorage se data load na ho jaaye tab loading state dikhaye
+  if (!isLoaded) {
+    return <div>Loading timer...</div>;
+  }
+
   return (
     <>
       <Card className="w-full">

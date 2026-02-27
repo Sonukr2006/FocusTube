@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useParams } from "react-router";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router";
 import { ChartAreaInteractive } from "./chart-area-interactive";
 import { DataTable } from "./data-table";
 import { SectionCards } from "./section-cards";
@@ -12,6 +12,7 @@ import { Button } from "./ui/button";
 
 export default function Dashboard() {
   const { userId } = useParams();
+  const navigate = useNavigate();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
@@ -19,11 +20,26 @@ export default function Dashboard() {
   const [history, setHistory] = useState([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [historyError, setHistoryError] = useState("");
+  const storedUser = useMemo(() => {
+    const rawUser = localStorage.getItem("focustube_user");
+    if (!rawUser) return null;
+
+    try {
+      return JSON.parse(rawUser);
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const authenticatedUserId = storedUser?._id ? String(storedUser._id) : "";
+  const routeUserId = userId ? String(userId) : "";
+  const isValidUserSession =
+    Boolean(authenticatedUserId) && Boolean(routeUserId) && authenticatedUserId === routeUserId;
 
   useEffect(() => {
     const fetchProfile = async () => {
-      if (!userId) {
-        setProfileError("Invalid user.");
+      if (!isValidUserSession) {
+        setProfileError("Invalid user session. Please login again.");
         setIsLoadingProfile(false);
         return;
       }
@@ -43,13 +59,13 @@ export default function Dashboard() {
     };
 
     fetchProfile();
-  }, [userId]);
+  }, [isValidUserSession, userId]);
 
   useEffect(() => {
     const fetchHistory = async () => {
-      if (!userId) {
+      if (!isValidUserSession) {
         setHistory([]);
-        setHistoryError("Invalid user.");
+        setHistoryError("Invalid user session. Please login again.");
         setIsLoadingHistory(false);
         return;
       }
@@ -67,7 +83,7 @@ export default function Dashboard() {
     };
 
     fetchHistory();
-  }, [userId]);
+  }, [isValidUserSession, userId]);
 
   const formatWatchTime = (seconds) => {
     const safeSeconds = Math.max(0, Number(seconds) || 0);
@@ -80,6 +96,36 @@ export default function Dashboard() {
     const timestamp = Date.parse(value || "");
     if (Number.isNaN(timestamp)) return "Unknown";
     return new Date(timestamp).toLocaleString();
+  };
+
+  const handleResumeSession = (item) => {
+    if (!isValidUserSession || !item?.playlistId) {
+      alert("Invalid user session. Please login again.");
+      return;
+    }
+
+    const ownerUserId = item?.userId ? String(item.userId) : "";
+    if (ownerUserId && ownerUserId !== routeUserId) {
+      alert("You cannot resume a playlist saved by another user.");
+      return;
+    }
+
+    navigate(`/user/${encodeURIComponent(routeUserId)}/sessions`, {
+      state: {
+        resumeSession: {
+          playlistId: item.playlistId,
+          playlistTitle: item.playlistTitle || "",
+          videoId: item.videoId || "",
+          lastVideoTitle: item.lastVideoTitle || "",
+          videoIndex: Math.max(0, Number(item.videoIndex) || 0),
+          currentTimeSec: Math.max(0, Number(item.currentTimeSec) || 0),
+          isCompleted: Boolean(item.isCompleted),
+          ownerUserId,
+          ownerUserEmail: item?.userEmail || "",
+          updatedAt: item?.updatedAt || "",
+        },
+      },
+    });
   };
 
   return (
@@ -112,7 +158,9 @@ export default function Dashboard() {
                   </CardHeader>
                   <CardContent className="space-y-2">
                     {isLoadingHistory ? (
-                      <p className="text-sm text-muted-foreground">Loading history...</p>
+                      <p className="text-sm text-muted-foreground">
+                        Loading history...
+                      </p>
                     ) : null}
                     {!isLoadingHistory && historyError ? (
                       <p className="text-sm text-destructive">{historyError}</p>
@@ -123,32 +171,53 @@ export default function Dashboard() {
                       </p>
                     ) : null}
                     {!isLoadingHistory && !historyError && history.length
-                      ? history.map((item) => (
-                          <div key={item.playlistId} className="rounded-md border p-3">
+                      ? history.map((item) => {
+                          const ownerUserId = item?.userId ? String(item.userId) : "";
+                          const isOwnerMatch = !ownerUserId || ownerUserId === routeUserId;
+
+                          return (
+                            <div
+                              key={item.playlistId}
+                              className="rounded-md border p-3"
+                            >
                             <p className="text-sm font-medium">
                               {item.playlistTitle || "YouTube Playlist"}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Saved by: {item.userEmail || email || "Unknown user"}
                             </p>
                             <p className="text-xs text-muted-foreground">
                               Playlist ID: {item.playlistId}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              Last video: {item.lastVideoTitle || item.videoId || "N/A"}
+                              Last video:{" "}
+                              {item.lastVideoTitle || item.videoId || "N/A"}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              Last position: {formatWatchTime(item.currentTimeSec)}
+                              Last position:{" "}
+                              {formatWatchTime(item.currentTimeSec)}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              Status: {item.isCompleted ? "Completed" : "In progress"}
+                              Status:{" "}
+                              {item.isCompleted ? "Completed" : "In progress"}
                             </p>
                             <p className="text-xs text-muted-foreground">
                               Updated: {formatUpdatedAt(item.updatedAt)}
                             </p>
+                            <div className="m-3">
+                              <Button
+                                onClick={() => handleResumeSession(item)}
+                                variant="outline"
+                                size="sm"
+                                disabled={!isOwnerMatch}
+                              >
+                                {isOwnerMatch ? "Resume" : "Not your playlist"}
+                              </Button>
+                            </div>
                           </div>
-                        ))
+                        );
+                        })
                       : null}
-                      <div>
-                        <Button  variant="outline" size="sm">Resume</Button>
-                      </div>
                   </CardContent>
                 </Card>
               </div>

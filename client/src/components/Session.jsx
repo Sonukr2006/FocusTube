@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useParams } from "react-router";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Label } from "./ui/label";
 import { Input } from "./ui/input";
@@ -196,6 +197,8 @@ function loadYoutubeIframeApi() {
 }
 
 const Session = () => {
+  const location = useLocation();
+  const { userId } = useParams();
   const [playlistInput, setPlaylistInput] = useState("");
   const [playlistId, setPlaylistId] = useState("");
   const [playlistTitle, setPlaylistTitle] = useState("");
@@ -215,6 +218,21 @@ const Session = () => {
   const currentIndexRef = useRef(0);
   const playlistIdRef = useRef("");
   const playlistTitleRef = useRef("");
+  const handledLocationKeyRef = useRef("");
+  const storedUser = useMemo(() => {
+    const rawUser = localStorage.getItem("focustube_user");
+    if (!rawUser) return null;
+
+    try {
+      return JSON.parse(rawUser);
+    } catch {
+      return null;
+    }
+  }, []);
+  const authenticatedUserId = storedUser?._id ? String(storedUser._id) : "";
+  const routeUserId = userId ? String(userId) : "";
+  const isValidUserSession =
+    Boolean(authenticatedUserId) && Boolean(routeUserId) && authenticatedUserId === routeUserId;
 
   const currentVideo = useMemo(() => videos[currentIndex] || null, [videos, currentIndex]);
 
@@ -414,14 +432,7 @@ const Session = () => {
     });
   }, [handlePlayerStateChange, playNow]);
 
-  const handleLoadPlaylist = async (event) => {
-    event.preventDefault();
-    const parsedId = extractPlaylistId(playlistInput);
-    if (!parsedId) {
-      setError("Please enter a valid YouTube playlist URL or playlist ID.");
-      return;
-    }
-
+  const loadPlaylistById = useCallback(async (parsedId) => {
     try {
       setIsLoading(true);
       setError("");
@@ -450,7 +461,54 @@ const Session = () => {
     } finally {
       setIsLoading(false);
     }
+  }, []);
+
+  const handleLoadPlaylist = async (event) => {
+    event.preventDefault();
+    const parsedId = extractPlaylistId(playlistInput);
+    if (!parsedId) {
+      setError("Please enter a valid YouTube playlist URL or playlist ID.");
+      return;
+    }
+
+    await loadPlaylistById(parsedId);
   };
+
+  useEffect(() => {
+    const resumeData = location.state?.resumeSession;
+    const resumePlaylistId = extractPlaylistId(resumeData?.playlistId || "");
+    if (!resumePlaylistId) return;
+    if (handledLocationKeyRef.current === location.key) return;
+
+    if (!isValidUserSession) {
+      setError("Invalid user session. Please login again.");
+      return;
+    }
+
+    const ownerUserId = resumeData?.ownerUserId ? String(resumeData.ownerUserId) : "";
+    if (ownerUserId && ownerUserId !== authenticatedUserId) {
+      setError("This playlist was saved by another user.");
+      return;
+    }
+
+    handledLocationKeyRef.current = location.key;
+
+    setPlaylistInput(resumePlaylistId);
+
+    const resumeProgress = {
+      playlistId: resumePlaylistId,
+      playlistTitle: resumeData?.playlistTitle || "YouTube Playlist",
+      videoId: resumeData?.videoId || "",
+      lastVideoTitle: resumeData?.lastVideoTitle || "",
+      videoIndex: Math.max(0, Number(resumeData?.videoIndex) || 0),
+      currentTimeSec: Math.max(0, Number(resumeData?.currentTimeSec) || 0),
+      isCompleted: Boolean(resumeData?.isCompleted),
+      updatedAt: resumeData?.updatedAt || new Date().toISOString(),
+    };
+
+    saveProgress(resumePlaylistId, resumeProgress);
+    void loadPlaylistById(resumePlaylistId);
+  }, [authenticatedUserId, isValidUserSession, loadPlaylistById, location.key, location.state]);
 
   useEffect(() => {
     if (!playlistId || !videos.length) return;

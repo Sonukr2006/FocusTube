@@ -2,6 +2,8 @@ import mongoose from "mongoose";
 import { SessionProgress } from "../models/session-progress.model.js";
 
 const sanitizeProgress = (doc) => ({
+  userId: doc.userId ? String(doc.userId) : "",
+  userEmail: doc.userEmail || "",
   playlistId: doc.playlistId,
   playlistTitle: doc.playlistTitle,
   videoId: doc.videoId,
