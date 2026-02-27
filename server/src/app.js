@@ -48,11 +48,13 @@ app.use(cookieParser());
 import userRouter from "./routes/user.route.js";
 import todoRouter from "./routes/todo.route.js";
 import youtubeRouter from "./routes/youtube.route.js";
+import sessionProgressRouter from "./routes/session-progress.route.js";
 
 //routes declaration
 app.use("/api/users", userRouter);
 app.use("/api/todos", todoRouter);
 app.use("/api/youtube", youtubeRouter);
+app.use("/api/sessions", sessionProgressRouter);
 app.use("/api", youtubeRouter);
 
 export { app };

@@ -103,7 +103,7 @@ export const updateTodoStatus = async (req, res) => {
     const todo = await Todo.findOneAndUpdate(
       { _id: id, userId },
       { completed: completed === true },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     if (!todo) {

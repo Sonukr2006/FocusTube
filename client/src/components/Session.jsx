@@ -3,6 +3,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/
 import { Label } from "./ui/label";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
+import {
+  getSessionProgress,
+  saveSessionProgress,
+} from "@/lib/sessionProgress";
 
 const YT_IFRAME_API_SRC = "https://www.youtube.com/iframe_api";
 const SAVE_INTERVAL_MS = 10000;
@@ -55,11 +59,6 @@ function saveProgress(playlistId, progress) {
   localStorage.setItem(getProgressStorageKey(playlistId), JSON.stringify(progress));
 }
 
-function clearProgress(playlistId) {
-  if (!playlistId) return;
-  localStorage.removeItem(getProgressStorageKey(playlistId));
-}
-
 function normalizeVideoItems(rawItems) {
   const items = Array.isArray(rawItems)
     ? rawItems
@@ -105,6 +104,21 @@ function parseBackendStartIndex(payload) {
   }
 
   return 0;
+}
+
+function parseIsoTime(value) {
+  const timestamp = Date.parse(value || "");
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function pickLatestProgress(localProgress, remoteProgress) {
+  if (!localProgress && !remoteProgress) return null;
+  if (!localProgress) return remoteProgress;
+  if (!remoteProgress) return localProgress;
+
+  return parseIsoTime(remoteProgress.updatedAt) >= parseIsoTime(localProgress.updatedAt)
+    ? remoteProgress
+    : localProgress;
 }
 
 async function fetchPlaylistVideos(playlistId) {
@@ -190,7 +204,6 @@ const Session = () => {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [playerReady, setPlayerReady] = useState(false);
-  const [pendingResumeProgress, setPendingResumeProgress] = useState(null);
   const [lastSavedProgress, setLastSavedProgress] = useState(null);
   const [isPlaylistCompleted, setIsPlaylistCompleted] = useState(false);
   const [backendStartIndex, setBackendStartIndex] = useState(0);
@@ -201,6 +214,7 @@ const Session = () => {
   const videosRef = useRef([]);
   const currentIndexRef = useRef(0);
   const playlistIdRef = useRef("");
+  const playlistTitleRef = useRef("");
 
   const currentVideo = useMemo(() => videos[currentIndex] || null, [videos, currentIndex]);
 
@@ -216,13 +230,17 @@ const Session = () => {
     playlistIdRef.current = playlistId;
   }, [playlistId]);
 
+  useEffect(() => {
+    playlistTitleRef.current = playlistTitle;
+  }, [playlistTitle]);
+
   const captureAndSaveProgress = useCallback(() => {
     const player = playerRef.current;
     const currentPlaylistId = playlistIdRef.current;
     const list = videosRef.current;
     const index = currentIndexRef.current;
 
-    if (!player || !currentPlaylistId || !list.length || pendingResumeProgress) return null;
+    if (!player || !currentPlaylistId || !list.length) return null;
 
     const safeIndex = Math.min(Math.max(index, 0), list.length - 1);
     const currentTimeSec = Math.floor(player.getCurrentTime?.() || 0);
@@ -230,16 +248,36 @@ const Session = () => {
 
     const progress = {
       playlistId: currentPlaylistId,
+      playlistTitle: playlistTitleRef.current || "YouTube Playlist",
       videoIndex: safeIndex,
       videoId: video.videoId,
+      lastVideoTitle: video.title || "",
       currentTimeSec,
+      isCompleted: false,
       updatedAt: new Date().toISOString(),
     };
 
     saveProgress(currentPlaylistId, progress);
     setLastSavedProgress(progress);
     return progress;
-  }, [pendingResumeProgress]);
+  }, []);
+
+  const syncProgressToBackend = useCallback(async (progress) => {
+    if (!progress?.playlistId) return;
+
+    try {
+      await saveSessionProgress(progress.playlistId, {
+        playlistTitle: progress.playlistTitle,
+        videoId: progress.videoId,
+        lastVideoTitle: progress.lastVideoTitle,
+        videoIndex: progress.videoIndex,
+        currentTimeSec: progress.currentTimeSec,
+        isCompleted: progress.isCompleted,
+      });
+    } catch {
+      // Keep local progress as fallback when backend sync fails.
+    }
+  }, []);
 
   const playNow = useCallback((index, startSeconds = 0) => {
     const list = videosRef.current;
@@ -266,7 +304,7 @@ const Session = () => {
       }
       playNow(index, startSeconds);
     },
-    [playerReady, playNow],
+    [playerReady, playNow]
   );
 
   const handlePrevious = useCallback(() => {
@@ -285,36 +323,67 @@ const Session = () => {
 
   const handleReplayPlaylist = useCallback(() => {
     const currentPlaylistId = playlistIdRef.current;
-    if (!videosRef.current.length) return;
-    clearProgress(currentPlaylistId);
-    setLastSavedProgress(null);
-    setPendingResumeProgress(null);
+    const list = videosRef.current;
+    if (!list.length) return;
+
+    const firstVideo = list[0];
+    const resetProgress = {
+      playlistId: currentPlaylistId,
+      playlistTitle: playlistTitleRef.current || "YouTube Playlist",
+      videoIndex: 0,
+      videoId: firstVideo.videoId,
+      lastVideoTitle: firstVideo.title || "",
+      currentTimeSec: 0,
+      isCompleted: false,
+      updatedAt: new Date().toISOString(),
+    };
+    saveProgress(currentPlaylistId, resetProgress);
+    setLastSavedProgress(resetProgress);
+    void syncProgressToBackend(resetProgress);
     startPlayback(0, 0);
-  }, [startPlayback]);
+  }, [startPlayback, syncProgressToBackend]);
 
   const handlePlayerStateChange = useCallback(
     (event) => {
       if (event.data === PLAYER_STATES.PAUSED) {
-        captureAndSaveProgress();
+        const progress = captureAndSaveProgress();
+        if (progress) void syncProgressToBackend(progress);
       }
 
       if (event.data === PLAYER_STATES.ENDED) {
-        captureAndSaveProgress();
+        const progress = captureAndSaveProgress();
+        if (progress) void syncProgressToBackend(progress);
+
         const list = videosRef.current;
         if (!list.length) return;
         const currentIdx = currentIndexRef.current;
         const isLastVideo = currentIdx >= list.length - 1;
+
         if (isLastVideo) {
-          clearProgress(playlistIdRef.current);
-          setLastSavedProgress(null);
+          const currentPlaylistId = playlistIdRef.current;
+          const firstVideo = list[0];
+          const completedVideo = list[currentIdx];
+          const completedProgress = {
+            playlistId: currentPlaylistId,
+            playlistTitle: playlistTitleRef.current || "YouTube Playlist",
+            videoIndex: 0,
+            videoId: firstVideo?.videoId || completedVideo?.videoId || "",
+            lastVideoTitle: completedVideo?.title || "",
+            currentTimeSec: 0,
+            isCompleted: true,
+            updatedAt: new Date().toISOString(),
+          };
+          saveProgress(currentPlaylistId, completedProgress);
+          setLastSavedProgress(completedProgress);
+          void syncProgressToBackend(completedProgress);
           setIsPlaylistCompleted(true);
           return;
         }
-        const nextIndex = currentIdx + 1;
-        playNow(nextIndex, 0);
+
+        playNow(currentIdx + 1, 0);
       }
     },
-    [captureAndSaveProgress, playNow],
+    [captureAndSaveProgress, playNow, syncProgressToBackend]
   );
 
   const ensurePlayer = useCallback(async () => {
@@ -356,7 +425,6 @@ const Session = () => {
     try {
       setIsLoading(true);
       setError("");
-      setPendingResumeProgress(null);
       setLastSavedProgress(null);
       setIsPlaylistCompleted(false);
       setBackendStartIndex(0);
@@ -364,8 +432,9 @@ const Session = () => {
       const payload = await fetchPlaylistVideos(parsedId);
       const safeStartIndex = Math.min(
         Math.max(payload.startIndex || 0, 0),
-        Math.max(payload.videos.length - 1, 0),
+        Math.max(payload.videos.length - 1, 0)
       );
+
       setPlaylistId(parsedId);
       setPlaylistTitle(payload.playlistTitle);
       setVideos(payload.videos);
@@ -387,19 +456,35 @@ const Session = () => {
     if (!playlistId || !videos.length) return;
 
     let isCancelled = false;
+
     const initialize = async () => {
       try {
         await ensurePlayer();
         if (isCancelled) return;
 
-        const saved = getSavedProgress(playlistId);
+        const localSaved = getSavedProgress(playlistId);
+        let remoteSaved = null;
+
+        try {
+          const remoteResponse = await getSessionProgress(playlistId);
+          remoteSaved = remoteResponse?.data || null;
+        } catch {
+          remoteSaved = null;
+        }
+
+        const saved = pickLatestProgress(localSaved, remoteSaved);
         if (saved && typeof saved.videoIndex === "number") {
           const safeIndex = Math.min(Math.max(saved.videoIndex, 0), videos.length - 1);
-          setPendingResumeProgress({
+          const safeTime = Math.max(0, Number(saved.currentTimeSec) || 0);
+          const normalizedSaved = {
             ...saved,
             videoIndex: safeIndex,
-          });
-          setLastSavedProgress(saved);
+            currentTimeSec: safeTime,
+          };
+
+          saveProgress(playlistId, normalizedSaved);
+          setLastSavedProgress(normalizedSaved);
+          startPlayback(safeIndex, safeTime);
           return;
         }
 
@@ -419,10 +504,11 @@ const Session = () => {
   }, [backendStartIndex, ensurePlayer, playlistId, startPlayback, videos]);
 
   useEffect(() => {
-    if (!playerReady || !playlistId || !videos.length || pendingResumeProgress) return undefined;
+    if (!playerReady || !playlistId || !videos.length) return undefined;
 
     saveIntervalRef.current = window.setInterval(() => {
-      captureAndSaveProgress();
+      const progress = captureAndSaveProgress();
+      if (progress) void syncProgressToBackend(progress);
     }, SAVE_INTERVAL_MS);
 
     return () => {
@@ -431,34 +517,38 @@ const Session = () => {
         saveIntervalRef.current = null;
       }
     };
-  }, [captureAndSaveProgress, pendingResumeProgress, playerReady, playlistId, videos.length]);
+  }, [captureAndSaveProgress, playerReady, playlistId, syncProgressToBackend, videos.length]);
 
   useEffect(() => {
     const handleBeforeUnload = () => {
-      captureAndSaveProgress();
+      const progress = captureAndSaveProgress();
+      if (progress) void syncProgressToBackend(progress);
     };
 
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [captureAndSaveProgress]);
+  }, [captureAndSaveProgress, syncProgressToBackend]);
 
   useEffect(() => {
     return () => {
-      captureAndSaveProgress();
+      const progress = captureAndSaveProgress();
+      if (progress) void syncProgressToBackend(progress);
+
       if (saveIntervalRef.current) {
         window.clearInterval(saveIntervalRef.current);
         saveIntervalRef.current = null;
       }
+
       if (playerRef.current) {
         playerRef.current.destroy();
         playerRef.current = null;
       }
     };
-  }, [captureAndSaveProgress]);
+  }, [captureAndSaveProgress, syncProgressToBackend]);
 
-  const controlsDisabled = !videos.length || Boolean(pendingResumeProgress);
+  const controlsDisabled = !videos.length;
   const isAtFirstVideo = currentIndex <= 0;
   const isAtLastVideo = !videos.length || currentIndex >= videos.length - 1;
 
@@ -467,7 +557,7 @@ const Session = () => {
       <CardHeader>
         <CardTitle>YouTube Session</CardTitle>
         <CardDescription>
-          Paste playlist URL, fetch videos from backend API, and play in custom sequence.
+          Paste playlist URL, fetch videos from backend API, and continue exactly where you left off.
         </CardDescription>
       </CardHeader>
 
@@ -498,44 +588,6 @@ const Session = () => {
             {isPlaylistCompleted ? (
               <p className="font-medium text-foreground">Playlist completed.</p>
             ) : null}
-          </div>
-        ) : null}
-
-        {pendingResumeProgress ? (
-          <div className="flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-muted-foreground">
-              Resume from video #{pendingResumeProgress.videoIndex + 1} at{" "}
-              {pendingResumeProgress.currentTimeSec || 0}s?
-            </p>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  const resumeIndex = videos.findIndex(
-                    (video) => video.videoId === pendingResumeProgress.videoId,
-                  );
-                  const indexToUse =
-                    resumeIndex >= 0 ? resumeIndex : pendingResumeProgress.videoIndex || 0;
-                  startPlayback(indexToUse, pendingResumeProgress.currentTimeSec || 0);
-                  setPendingResumeProgress(null);
-                }}
-              >
-                Resume
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  clearProgress(playlistId);
-                  setLastSavedProgress(null);
-                  setPendingResumeProgress(null);
-                  startPlayback(0, 0);
-                }}
-              >
-                Start Over
-              </Button>
-            </div>
           </div>
         ) : null}
 
@@ -582,9 +634,7 @@ const Session = () => {
                   type="button"
                   onClick={() => startPlayback(index, 0)}
                   className={`w-full rounded-md border p-2 text-left text-sm transition ${
-                    index === currentIndex
-                      ? "border-primary bg-primary/10"
-                      : "hover:bg-muted/60"
+                    index === currentIndex ? "border-primary bg-primary/10" : "hover:bg-muted/60"
                   }`}
                 >
                   {index + 1}. {video.title}

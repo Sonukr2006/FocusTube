@@ -20,7 +20,17 @@ const sessionProgressSchema = new mongoose.Schema(
       trim: true,
       index: true,
     },
+    playlistTitle: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     videoId: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    lastVideoTitle: {
       type: String,
       default: "",
       trim: true,
@@ -34,6 +44,10 @@ const sessionProgressSchema = new mongoose.Schema(
       type: Number,
       default: 0,
       min: 0,
+    },
+    isCompleted: {
+      type: Boolean,
+      default: false,
     },
   },
   {
