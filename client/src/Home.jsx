@@ -15,7 +15,7 @@ import {
 } from "./components/ui/sidebar";
 import { Avatar, AvatarFallback, AvatarImage } from "./components/ui/avatar";
 import { Link } from "react-router";
-export default function Home() {
+export default function Home({children}) {
   return (
     <SidebarProvider className="min-h-full">
       <AppSidebar className="top-14 h-[calc(100svh-3.5rem)]" />
@@ -45,12 +45,13 @@ export default function Home() {
           </Link>
         </header> 
         <div className="flex flex-1 flex-col gap-4 p-4">
-          <div className="grid auto-rows-min gap-4 md:grid-cols-3">
+          {/* <div className="grid auto-rows-min gap-4 md:grid-cols-3">
             <div className="bg-muted/50 aspect-video rounded-xl" />
             <div className="bg-muted/50 aspect-video rounded-xl" />
             <div className="bg-muted/50 aspect-video rounded-xl" />
           </div>
-          <div className="bg-muted/50 min-h-[100vh] flex-1 rounded-xl md:min-h-min" />
+          <div className="bg-muted/50 min-h-[100vh] flex-1 rounded-xl md:min-h-min" /> */}
+          {children}
         </div>
       </SidebarInset>
     </SidebarProvider>

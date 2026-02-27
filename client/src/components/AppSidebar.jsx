@@ -24,7 +24,7 @@ const data = {
   navMain: [
     {
       title: "Home",
-      url: "#",
+      url: "/user",
     },
     {
       title: "Blocker",
@@ -32,7 +32,7 @@ const data = {
     },
     {
       title: "Sessions",
-      url: "#",
+      url: "/user/sessions",
     },
     {
       title: "Murmure",

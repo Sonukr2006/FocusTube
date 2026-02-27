@@ -11,6 +11,8 @@ import Heros from "./components/Heros";
 import Home from "./Home";
 import Profile from "./components/Profile";
 import Dashboard from "./components/Dashboard";
+import Session from "./components/Session";
+import HomeContent from "./components/HomeContent";
 
 const router = createBrowserRouter([
   {
@@ -37,12 +39,17 @@ const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <Home />,
+        element: <Home><HomeContent /></Home>,
       },
       {
         // path: "/user/profile/:userId",
-        path: "/user/profile",
-        element: <Dashboard />,
+        path: "profile",
+        element: <Home><Dashboard /></Home>,
+      },
+      {
+        // path: "/user/profile/:userId/sessions",
+        path: "/user/sessions",
+        element: <Home><Session /></Home>,
       },
     ],
   },
