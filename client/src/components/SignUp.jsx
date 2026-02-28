@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { NavLink, useNavigate, useOutletContext } from "react-router";
+import { NavLink, useNavigate } from "react-router";
 import { Button } from "./ui/button";
 import {
   Card,
@@ -12,11 +12,16 @@ import {
 } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { signUp } from "@/lib/auth";
+import { useDispatch, useSelector } from "react-redux";
+import {
+  selectAuthLoading,
+  signUpUserThunk,
+} from "@/store/slices/authSlice";
 
 export default function SignUp() {
   const navigate = useNavigate();
-  const { setIsLoggedIn } = useOutletContext() ?? {};
+  const dispatch = useDispatch();
+  const isAuthLoading = useSelector(selectAuthLoading);
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -24,7 +29,6 @@ export default function SignUp() {
     password: "",
   });
   const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
 
   const handleChange = (event) => {
     const { id, value } = event.target;
@@ -68,29 +72,18 @@ export default function SignUp() {
       return;
     }
 
-    setIsLoading(true);
-
     try {
-      const response = await signUp(formData);
-      const user = response?.data?.user;
-      const accessToken = response?.data?.accessToken;
-
-      if (user) {
-        localStorage.setItem("focustube_user", JSON.stringify(user));
-      }
-      if (accessToken) {
-        localStorage.setItem("focustube_access_token", accessToken);
-      }
-
+      const response = await dispatch(signUpUserThunk(formData)).unwrap();
+      const user = response?.user;
       alert(response?.message || "Account created successfully.");
-      setIsLoggedIn?.(true);
       navigate(user?._id ? `/user/${user._id}` : "/");
     } catch (requestError) {
-      const message = requestError.message || "Unable to create account";
+      const message =
+        typeof requestError === "string"
+          ? requestError
+          : requestError?.message || "Unable to create account";
       setError(message);
       alert(message);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -162,8 +155,8 @@ export default function SignUp() {
               />
             </div>
             {error ? <p className="text-sm text-red-500">{error}</p> : null}
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Creating account..." : "Sign Up"}
+            <Button type="submit" className="w-full" disabled={isAuthLoading}>
+              {isAuthLoading ? "Creating account..." : "Sign Up"}
             </Button>
           </div>
         </form>

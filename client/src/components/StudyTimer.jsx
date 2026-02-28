@@ -10,6 +10,12 @@ import {
   recordTimerSessionStarted,
   saveTimerState,
 } from "@/lib/timerAnalytics";
+import {
+  BLOCKER_SETTINGS_EVENT,
+  BLOCKER_SETTINGS_STORAGE_KEY,
+  isTimerBlockerConfigured,
+  setTimerDrivenBlockState,
+} from "@/lib/blockerRuntime";
 
 const QUICK_DURATIONS = [30, 45, 60];
 
@@ -29,6 +35,7 @@ const StudyTimer = ({ interactive = true, compact = false }) => {
   const [customMinutes, setCustomMinutes] = useState("");
   const [isCompleted, setIsCompleted] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [blockerSyncTick, setBlockerSyncTick] = useState(0);
 
   // Page load ke time localStorage se state restore kare
   useEffect(() => {
@@ -51,6 +58,32 @@ const StudyTimer = ({ interactive = true, compact = false }) => {
       isCompleted,
     });
   }, [activeUserId, isCompleted, isLoaded, isRunning, targetSec, timeLeftSec]);
+
+  useEffect(() => {
+    const handleSettingsUpdate = () => {
+      setBlockerSyncTick((value) => value + 1);
+    };
+
+    const handleStorage = (event) => {
+      if (event.key !== BLOCKER_SETTINGS_STORAGE_KEY) return;
+      handleSettingsUpdate();
+    };
+
+    window.addEventListener(BLOCKER_SETTINGS_EVENT, handleSettingsUpdate);
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.removeEventListener(BLOCKER_SETTINGS_EVENT, handleSettingsUpdate);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    const hasUnfinishedTimer = targetSec > 0 && timeLeftSec > 0 && !isCompleted;
+    const shouldBlock = hasUnfinishedTimer && isTimerBlockerConfigured();
+    setTimerDrivenBlockState(shouldBlock);
+  }, [blockerSyncTick, isCompleted, isLoaded, targetSec, timeLeftSec]);
 
   const startCountdown = (minutes) => {
     const parsedMinutes = Number(minutes);
@@ -116,14 +149,9 @@ const StudyTimer = ({ interactive = true, compact = false }) => {
 
   return (
     <>
-      <Card className="w-fullm m-10 mt-0">
+      <Card className="w-full mt-0">
         <CardHeader className={compact ? "space-y-1 pb-2" : "space-y-1"}>
           <CardTitle className={compact ? "text-base" : undefined}>Study Timer</CardTitle>
-          <CardDescription>
-            {interactive
-              ? "Start focus session and countdown to 00:00."
-              : "Timer is visible here. Start/stop controls are only on Home page."}
-          </CardDescription>
         </CardHeader>
         <CardContent
           className={`flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between ${

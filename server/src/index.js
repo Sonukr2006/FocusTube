@@ -12,17 +12,26 @@ dotenv.config({
 });
 
 const startServer = async () => {
+  let isDatabaseConnected = false;
   try {
     await connectDB();
-
-    app.listen(process.env.PORT, () => {
-      console.log(`\nServer is running on port in index.js: ${process.env.PORT}`);
-      console.log(`Open http://localhost:${process.env.PORT} in your browser`);
-    });
+    isDatabaseConnected = true;
   } catch (err) {
-    console.log("Error in index.js starting server:", err);
-    process.exit(1);
+    console.log(
+      "MongoDB unavailable. Starting server in limited mode (DB routes may fail):",
+      err.message
+    );
   }
+
+  app.locals.isDatabaseConnected = isDatabaseConnected;
+
+  app.listen(process.env.PORT, () => {
+    console.log(`\nServer is running on port in index.js: ${process.env.PORT}`);
+    console.log(`Open http://localhost:${process.env.PORT} in your browser`);
+    if (!isDatabaseConnected) {
+      console.log("Running without MongoDB connection. Bot/YouTube APIs are still available.");
+    }
+  });
 };
 
 startServer();

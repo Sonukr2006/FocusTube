@@ -1,28 +1,35 @@
 import {
   ArrowRight,
+  BarChart3,
   CheckCircle2,
-  ShieldCheck,
-  Users,
-  Zap,
+  MessageSquareText,
+  PlayCircle,
+  Timer,
+  Waves,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import Logo from "@/Logo";
 
 const highlights = [
   {
-    title: "Smart Team Views",
-    description: "Track members, roles, and updates in one clean dashboard.",
-    icon: Users,
+    title: "YouTube Study Sessions",
+    description: "Paste playlist or video link, start focused playback, and resume exactly where you stopped.",
+    icon: PlayCircle,
   },
   {
-    title: "Fast Workflow",
-    description: "Create sessions and tasks quickly with less manual effort.",
-    icon: Zap,
+    title: "Focus Timer + Todos",
+    description: "Run structured study blocks and manage your task list without leaving the workflow.",
+    icon: Timer,
   },
   {
-    title: "Secure Access",
-    description: "Protected routes and clean auth flow for your workspace.",
-    icon: ShieldCheck,
+    title: "SoftMurmure Sound Mixer",
+    description: "Reduce outside noise with custom rain, wind, brown noise and local ambient sound mixes.",
+    icon: Waves,
+  },
+  {
+    title: "Transcript Q&A Bot",
+    description: "Ask questions from YouTube videos using transcript-aware Gemini/OpenAI responses.",
+    icon: MessageSquareText,
   },
 ];
 
@@ -35,21 +42,23 @@ const Heros = () => {
       />
 
       <div className="mx-auto flex max-w-6xl flex-col gap-10 lg:flex-row lg:items-center lg:justify-between">
-        <div className="max-w-2xl space-y-6">
+        <div className="max-w-2xl space-y-7">
           <div className="inline-flex items-center gap-2 rounded-full border border-border bg-background/70 px-3 py-1 text-xs font-medium tracking-wide text-muted-foreground">
             <span className="grid size-10 place-items-center rounded-full bg-card">
               <Logo />
             </span>
-            Welcome to FocusTube
+            FocusTube Learning System
           </div>
 
           <h1 className="text-3xl font-semibold leading-tight text-foreground sm:text-5xl">
-            Build your team workspace with a clean and focused interface.
+            Building a Distraction-Free Deep Learning Environment.
           </h1>
 
           <p className="max-w-xl text-sm text-muted-foreground sm:text-base">
-            FocusTube helps you organize people, sessions, and collaboration flow
-            without clutter. Start with your account and move faster.
+            FocusTube is built for students and self-learners who want less
+            distraction and more output. Plan study blocks, track progress,
+            control ambient sound, and ask smart questions from video transcripts
+            in one app.
           </p>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -57,34 +66,34 @@ const Heros = () => {
               to="/signup"
               className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
             >
-              Create Account
+              Start Free
               <ArrowRight className="size-4" />
             </Link>
             <Link
               to="/login"
               className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-4 py-2.5 text-sm font-semibold text-foreground transition hover:bg-muted/60"
             >
-              Login
+              Continue Login
             </Link>
           </div>
 
           <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1.5">
               <CheckCircle2 className="size-4 text-primary" />
-              Quick onboarding
+              Resume sessions automatically
             </span>
             <span className="inline-flex items-center gap-1.5">
               <CheckCircle2 className="size-4 text-primary" />
-              Responsive layout
+              Daily study analytics
             </span>
             <span className="inline-flex items-center gap-1.5">
               <CheckCircle2 className="size-4 text-primary" />
-              Ready for scaling
+              Transcript-based Q&A
             </span>
           </div>
         </div>
 
-        <div className="grid w-full max-w-xl gap-3 sm:grid-cols-3 lg:max-w-2xl">
+        <div className="grid w-full max-w-xl gap-3 sm:grid-cols-2 lg:max-w-2xl">
           {highlights.map((item) => {
             const Icon = item.icon;
             return (
@@ -105,6 +114,11 @@ const Heros = () => {
             );
           })}
         </div>
+      </div>
+
+      <div className="mx-auto mt-8 flex max-w-6xl items-center gap-2 rounded-lg border border-border/80 bg-background/65 px-4 py-2 text-xs text-muted-foreground">
+        <BarChart3 className="size-4 text-primary" />
+        Purpose: reduce distraction, improve retention, and make every study session measurable.
       </div>
     </section>
   );

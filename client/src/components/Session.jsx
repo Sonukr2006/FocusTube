@@ -4,10 +4,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/
 import { Label } from "./ui/label";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
+import { useDispatch, useSelector } from "react-redux";
+import { selectCurrentUser } from "@/store/slices/authSlice";
 import {
-  getSessionProgress,
-  saveSessionProgress,
-} from "@/lib/sessionProgress";
+  fetchSessionProgressThunk,
+  saveSessionProgressThunk,
+} from "@/store/slices/sessionsSlice";
+import { saveActiveSessionVideo } from "@/lib/activeSessionVideo";
 
 const YT_IFRAME_API_SRC = "https://www.youtube.com/iframe_api";
 const SAVE_INTERVAL_MS = 10000;
@@ -307,8 +310,10 @@ function loadYoutubeIframeApi() {
 }
 
 const Session = () => {
+  const dispatch = useDispatch();
   const location = useLocation();
   const { userId } = useParams();
+  const currentUser = useSelector(selectCurrentUser);
   const [playlistInput, setPlaylistInput] = useState("");
   const [playlistId, setPlaylistId] = useState("");
   const [playlistTitle, setPlaylistTitle] = useState("");
@@ -329,22 +334,22 @@ const Session = () => {
   const playlistIdRef = useRef("");
   const playlistTitleRef = useRef("");
   const handledLocationKeyRef = useRef("");
-  const storedUser = useMemo(() => {
-    const rawUser = localStorage.getItem("focustube_user");
-    if (!rawUser) return null;
-
-    try {
-      return JSON.parse(rawUser);
-    } catch {
-      return null;
-    }
-  }, []);
-  const authenticatedUserId = storedUser?._id ? String(storedUser._id) : "";
+  const authenticatedUserId = currentUser?._id ? String(currentUser._id) : "";
   const routeUserId = userId ? String(userId) : "";
   const isValidUserSession =
     Boolean(authenticatedUserId) && Boolean(routeUserId) && authenticatedUserId === routeUserId;
 
   const currentVideo = useMemo(() => videos[currentIndex] || null, [videos, currentIndex]);
+
+  useEffect(() => {
+    if (!currentVideo?.videoId) return;
+
+    saveActiveSessionVideo({
+      videoId: currentVideo.videoId,
+      title: currentVideo.title || "",
+      playlistId,
+    });
+  }, [currentVideo, playlistId]);
 
   useEffect(() => {
     videosRef.current = videos;
@@ -394,18 +399,23 @@ const Session = () => {
     if (!progress?.playlistId) return;
 
     try {
-      await saveSessionProgress(progress.playlistId, {
-        playlistTitle: progress.playlistTitle,
-        videoId: progress.videoId,
-        lastVideoTitle: progress.lastVideoTitle,
-        videoIndex: progress.videoIndex,
-        currentTimeSec: progress.currentTimeSec,
-        isCompleted: progress.isCompleted,
-      });
+      await dispatch(
+        saveSessionProgressThunk({
+          playlistId: progress.playlistId,
+          payload: {
+            playlistTitle: progress.playlistTitle,
+            videoId: progress.videoId,
+            lastVideoTitle: progress.lastVideoTitle,
+            videoIndex: progress.videoIndex,
+            currentTimeSec: progress.currentTimeSec,
+            isCompleted: progress.isCompleted,
+          },
+        })
+      ).unwrap();
     } catch {
       // Keep local progress as fallback when backend sync fails.
     }
-  }, []);
+  }, [dispatch]);
 
   const playNow = useCallback((index, startSeconds = 0) => {
     const list = videosRef.current;
@@ -638,8 +648,10 @@ const Session = () => {
         let remoteSaved = null;
 
         try {
-          const remoteResponse = await getSessionProgress(playlistId);
-          remoteSaved = remoteResponse?.data || null;
+          const remoteResponse = await dispatch(
+            fetchSessionProgressThunk(playlistId)
+          ).unwrap();
+          remoteSaved = remoteResponse?.progress || null;
         } catch {
           remoteSaved = null;
         }
@@ -673,7 +685,7 @@ const Session = () => {
     return () => {
       isCancelled = true;
     };
-  }, [backendStartIndex, ensurePlayer, playlistId, startPlayback, videos]);
+  }, [backendStartIndex, dispatch, ensurePlayer, playlistId, startPlayback, videos]);
 
   useEffect(() => {
     if (!playerReady || !playlistId || !videos.length) return undefined;

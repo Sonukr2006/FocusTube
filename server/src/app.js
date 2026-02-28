@@ -23,7 +23,9 @@ const corsOptions = {
       return callback(null, true);
     }
 
+    const isLocalhostOrigin = /^http:\/\/localhost:\d+$/.test(origin);
     if (
+      isLocalhostOrigin ||
       configuredOrigins.includes("*") ||
       configuredOrigins.includes(origin)
     ) {

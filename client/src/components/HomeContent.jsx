@@ -1,110 +1,95 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router";
 import Todoes from "./HomesContent/Todoes.jsx";
 import TodoesList from "./HomesContent/TodoesList.jsx";
 import { Button } from "./ui/button";
+import { useDispatch, useSelector } from "react-redux";
 import {
-  createTodo,
-  deleteTodo,
-  getTodos,
-  updateTodoStatus,
-} from "@/lib/todos";
+  createTodoThunk,
+  deleteTodoThunk,
+  fetchTodosThunk,
+  selectTodosState,
+  updateTodoStatusThunk,
+} from "@/store/slices/todosSlice";
+import { selectCurrentUser } from "@/store/slices/authSlice";
 
 const HomeContent = () => {
+  const dispatch = useDispatch();
   const { userId: routeUserId } = useParams();
+  const currentUser = useSelector(selectCurrentUser);
+  const { items: todos, isLoading, isSaving, isDeleting, error: storeError } =
+    useSelector(selectTodosState);
   const [showTodoInput, setShowTodoInput] = useState(false);
-  const [todos, setTodos] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [error, setError] = useState("");
+  const [localError, setLocalError] = useState("");
   const [todoToDeleteId, setTodoToDeleteId] = useState("");
 
-  const storedUser = useMemo(() => {
-    const rawUser = localStorage.getItem("focustube_user");
-    if (!rawUser) return null;
-
-    try {
-      return JSON.parse(rawUser);
-    } catch {
-      return null;
-    }
-  }, []);
-
-  const userId = routeUserId || storedUser?._id || "";
+  const authUserId = currentUser?._id ? String(currentUser._id) : "";
+  const normalizedRouteUserId = routeUserId ? String(routeUserId) : "";
+  const userId = normalizedRouteUserId || authUserId;
+  const isValidUserSession =
+    Boolean(userId) &&
+    (!normalizedRouteUserId ||
+      (Boolean(authUserId) && normalizedRouteUserId === authUserId));
 
   useEffect(() => {
     const fetchTodos = async () => {
-      if (!userId) {
-        setTodos([]);
-        setIsLoading(false);
-        setError("User session not found. Please login again.");
+      if (!isValidUserSession) {
+        setLocalError("User session not found. Please login again.");
         return;
       }
 
       try {
-        setError("");
-        setIsLoading(true);
-        const response = await getTodos();
-        setTodos(response?.data || []);
+        setLocalError("");
+        await dispatch(fetchTodosThunk()).unwrap();
       } catch (requestError) {
-        setError(requestError.message || "Unable to fetch todos");
-      } finally {
-        setIsLoading(false);
+        const message =
+          typeof requestError === "string"
+            ? requestError
+            : requestError?.message || "Unable to fetch todos";
+        setLocalError(message);
       }
     };
 
     fetchTodos();
-  }, [userId]);
+  }, [dispatch, isValidUserSession]);
 
   const handleAddTodo = async ({ title, description }) => {
-    if (!userId) {
+    if (!isValidUserSession) {
       const message = "User session not found. Please login again.";
-      setError(message);
+      setLocalError(message);
       alert(message);
       return false;
     }
 
-    setIsSaving(true);
-
     try {
-      const response = await createTodo({
-        title,
-        description,
-      });
-      const createdTodo = response?.data;
-      if (createdTodo) {
-        setTodos((prev) => [createdTodo, ...prev]);
-      }
+      const response = await dispatch(
+        createTodoThunk({ title, description })
+      ).unwrap();
       setShowTodoInput(false);
       alert(response?.message || "Todo created successfully.");
       return true;
     } catch (requestError) {
-      const message = requestError.message || "Unable to create todo";
-      setError(message);
+      const message =
+        typeof requestError === "string"
+          ? requestError
+          : requestError?.message || "Unable to create todo";
+      setLocalError(message);
       alert(message);
       return false;
-    } finally {
-      setIsSaving(false);
     }
   };
 
   const handleToggleTodo = async (id, checked) => {
-    const nextCompleted = checked === true;
-    const previousTodos = [...todos];
-
-    setTodos((prev) =>
-      prev.map((todo) =>
-        todo._id === id ? { ...todo, completed: nextCompleted } : todo
-      )
-    );
-
     try {
-      await updateTodoStatus(id, nextCompleted);
+      await dispatch(
+        updateTodoStatusThunk({ id, completed: checked === true })
+      ).unwrap();
     } catch (requestError) {
-      setTodos(previousTodos);
-      const message = requestError.message || "Unable to update todo";
-      setError(message);
+      const message =
+        typeof requestError === "string"
+          ? requestError
+          : requestError?.message || "Unable to update todo";
+      setLocalError(message);
       alert(message);
     }
   };
@@ -121,21 +106,18 @@ const HomeContent = () => {
   const confirmDeleteTodo = async () => {
     if (!todoToDeleteId) return;
 
-    setIsDeleting(true);
     const deletingTodoId = todoToDeleteId;
-    const previousTodos = [...todos];
-    setTodos((prev) => prev.filter((todo) => todo._id !== deletingTodoId));
 
     try {
-      await deleteTodo(deletingTodoId);
+      await dispatch(deleteTodoThunk(deletingTodoId)).unwrap();
       setTodoToDeleteId("");
     } catch (requestError) {
-      setTodos(previousTodos);
-      const message = requestError.message || "Unable to delete todo";
-      setError(message);
+      const message =
+        typeof requestError === "string"
+          ? requestError
+          : requestError?.message || "Unable to delete todo";
+      setLocalError(message);
       alert(message);
-    } finally {
-      setIsDeleting(false);
     }
   };
 
@@ -151,7 +133,7 @@ const HomeContent = () => {
         <TodoesList
           todos={todos}
           isLoading={isLoading}
-          error={error}
+          error={localError || storeError}
           setShowTodoInput={setShowTodoInput}
           onToggleComplete={handleToggleTodo}
           onDeleteTodo={handleDeleteTodo}

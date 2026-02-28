@@ -6,37 +6,35 @@ import { SectionCards } from "./section-cards";
 import { SidebarInset, SidebarProvider } from "./ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { getUserProfile } from "@/lib/users";
-import { getSessionHistory } from "@/lib/sessionProgress";
-import { getTodos } from "@/lib/todos";
 import { loadTimerAnalytics } from "@/lib/timerAnalytics";
 import { Button } from "./ui/button";
+import { useDispatch, useSelector } from "react-redux";
+import { selectCurrentUser } from "@/store/slices/authSlice";
+import { fetchTodosThunk, selectTodosState } from "@/store/slices/todosSlice";
+import {
+  fetchSessionHistoryThunk,
+  selectSessionHistory,
+  selectSessionHistoryError,
+  selectSessionHistoryLoading,
+} from "@/store/slices/sessionsSlice";
 
 export default function Dashboard() {
+  const dispatch = useDispatch();
   const { userId } = useParams();
   const navigate = useNavigate();
+  const currentUser = useSelector(selectCurrentUser);
+  const history = useSelector(selectSessionHistory);
+  const isLoadingHistory = useSelector(selectSessionHistoryLoading);
+  const historyError = useSelector(selectSessionHistoryError);
+  const { items: todos, isLoading: isLoadingTodos, error: todoError } =
+    useSelector(selectTodosState);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [profileError, setProfileError] = useState("");
-  const [history, setHistory] = useState([]);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
-  const [historyError, setHistoryError] = useState("");
-  const [todos, setTodos] = useState([]);
-  const [isLoadingTodos, setIsLoadingTodos] = useState(true);
-  const [todoError, setTodoError] = useState("");
   const [timerAnalytics, setTimerAnalytics] = useState({});
-  const storedUser = useMemo(() => {
-    const rawUser = localStorage.getItem("focustube_user");
-    if (!rawUser) return null;
 
-    try {
-      return JSON.parse(rawUser);
-    } catch {
-      return null;
-    }
-  }, []);
-
-  const authenticatedUserId = storedUser?._id ? String(storedUser._id) : "";
+  const authenticatedUserId = currentUser?._id ? String(currentUser._id) : "";
   const routeUserId = userId ? String(userId) : "";
   const isValidUserSession =
     Boolean(authenticatedUserId) && Boolean(routeUserId) && authenticatedUserId === routeUserId;
@@ -67,52 +65,10 @@ export default function Dashboard() {
   }, [isValidUserSession, userId]);
 
   useEffect(() => {
-    const fetchHistory = async () => {
-      if (!isValidUserSession) {
-        setHistory([]);
-        setHistoryError("Invalid user session. Please login again.");
-        setIsLoadingHistory(false);
-        return;
-      }
-
-      try {
-        setHistoryError("");
-        setIsLoadingHistory(true);
-        const response = await getSessionHistory(50);
-        setHistory(Array.isArray(response?.data) ? response.data : []);
-      } catch (error) {
-        setHistoryError(error.message || "Unable to load session history.");
-      } finally {
-        setIsLoadingHistory(false);
-      }
-    };
-
-    fetchHistory();
-  }, [isValidUserSession, userId]);
-
-  useEffect(() => {
-    const fetchTodosForUser = async () => {
-      if (!isValidUserSession) {
-        setTodos([]);
-        setTodoError("Invalid user session. Please login again.");
-        setIsLoadingTodos(false);
-        return;
-      }
-
-      try {
-        setTodoError("");
-        setIsLoadingTodos(true);
-        const response = await getTodos();
-        setTodos(Array.isArray(response?.data) ? response.data : []);
-      } catch (error) {
-        setTodoError(error.message || "Unable to load todos.");
-      } finally {
-        setIsLoadingTodos(false);
-      }
-    };
-
-    fetchTodosForUser();
-  }, [isValidUserSession, userId]);
+    if (!isValidUserSession) return;
+    dispatch(fetchSessionHistoryThunk(50));
+    dispatch(fetchTodosThunk());
+  }, [dispatch, isValidUserSession]);
 
   useEffect(() => {
     if (!authenticatedUserId || !isValidUserSession) {

@@ -1,4 +1,4 @@
-import { NavLink, useNavigate, useOutletContext } from "react-router";
+import { NavLink, useNavigate } from "react-router";
 import { useState } from "react";
 import { Button } from "./ui/button";
 import {
@@ -12,14 +12,18 @@ import {
 } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { signIn } from "@/lib/auth";
+import { useDispatch, useSelector } from "react-redux";
+import {
+  selectAuthLoading,
+  signInUserThunk,
+} from "@/store/slices/authSlice";
 
 export default function Login() {
   const navigate = useNavigate();
-  const { setIsLoggedIn } = useOutletContext() ?? {};
+  const dispatch = useDispatch();
+  const isAuthLoading = useSelector(selectAuthLoading);
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
 
   const handleChange = (event) => {
     const { id, value } = event.target;
@@ -55,29 +59,18 @@ export default function Login() {
       return;
     }
 
-    setIsLoading(true);
-
     try {
-      const response = await signIn(formData);
-      const user = response?.data?.user;
-      const accessToken = response?.data?.accessToken;
-
-      if (user) {
-        localStorage.setItem("focustube_user", JSON.stringify(user));
-      }
-      if (accessToken) {
-        localStorage.setItem("focustube_access_token", accessToken);
-      }
-
+      const response = await dispatch(signInUserThunk(formData)).unwrap();
+      const user = response?.user;
       alert(response?.message || "Login successful.");
-      setIsLoggedIn?.(true);
       navigate(user?._id ? `/user/${user._id}` : "/");
     } catch (requestError) {
-      const message = requestError.message || "Unable to login";
+      const message =
+        typeof requestError === "string"
+          ? requestError
+          : requestError?.message || "Unable to login";
       setError(message);
       alert(message);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -132,8 +125,8 @@ export default function Login() {
               />
             </div>
             {error ? <p className="text-sm text-red-500">{error}</p> : null}
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Logging in..." : "Login"}
+            <Button type="submit" className="w-full" disabled={isAuthLoading}>
+              {isAuthLoading ? "Logging in..." : "Login"}
             </Button>
           </div>
         </form>

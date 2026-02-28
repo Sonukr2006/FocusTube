@@ -160,7 +160,7 @@ export default function Home({children}) {
         {!isHomePage ? (
           <div
             ref={floatingTimerRef}
-            className="fixed z-50 w-[min(300px,calc(100vw-2rem))]"
+            className="fixed z-50 w-[min(200px,calc(100vw-2rem))]"
             style={
               floatingPosition
                 ? {
@@ -171,7 +171,7 @@ export default function Home({children}) {
             }
           >
             <div
-              className="m-10 mb-0 cursor-move select-none rounded-md border border-border bg-card px-3 py-1 text-xs text-muted-foreground shadow-sm"
+              className="w-2/3 m-auto cursor-move select-none rounded-md border border-border bg-card px-3 py-1 text-xs text-muted-foreground shadow-sm"
               onMouseDown={handleDragStartMouse}
               onTouchStart={handleDragStartTouch}
             >

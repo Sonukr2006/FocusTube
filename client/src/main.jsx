@@ -13,6 +13,10 @@ import Dashboard from "./components/Dashboard";
 import Session from "./components/Session";
 import HomeContent from "./components/HomeContent";
 import Blocker from "./components/Blocker/Blocker";
+import { Provider } from "react-redux";
+import { store } from "./store";
+import SoftMurmure from "./components/SoftMurmure/SoftMurmure";
+import BotPanel from "./components/bot/BotPanel";
 
 const router = createBrowserRouter([
   {
@@ -56,6 +60,14 @@ const router = createBrowserRouter([
             path: "blocker",
             element: <Blocker />,
           },
+          {
+            path: "soft-murmure",
+            element: <SoftMurmure />,
+          },
+          {
+            path: "bot",
+            element: <BotPanel />,
+          },
         ],
       },
     ],
@@ -64,10 +76,12 @@ const router = createBrowserRouter([
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <TooltipProvider>
-      <div className="dark">
-        <RouterProvider router={router} />
-      </div>
-    </TooltipProvider>
+    <Provider store={store}>
+      <TooltipProvider>
+        <div className="dark">
+          <RouterProvider router={router} />
+        </div>
+      </TooltipProvider>
+    </Provider>
   </StrictMode>,
 );
