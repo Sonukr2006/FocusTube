@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FocusTube Blocker</title>
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body>
+    <main class="wrapper">
+      <header class="header">
+        <h1>FocusTube Blocker</h1>
+        <button id="refreshBtn" class="ghost-btn" type="button">Refresh</button>
+      </header>
+
+      <section class="status-card">
+        <p class="label">Status</p>
+        <p id="statusValue" class="status-text">Checking...</p>
+      </section>
+
+      <section class="status-card">
+        <p class="label">Timer Signal</p>
+        <p id="timerValue" class="small-text">Unknown</p>
+      </section>
+
+      <section class="status-card">
+        <p class="label">Blocked Domains</p>
+        <ul id="domainList" class="domain-list"></ul>
+      </section>
+
+      <footer class="footer">
+        <a id="openAppLink" href="http://localhost:5173" target="_blank" rel="noreferrer">
+          Open FocusTube
+        </a>
+      </footer>
+    </main>
+    <script src="./popup.js"></script>
+  </body>
+</html>

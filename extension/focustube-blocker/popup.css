@@ -1,0 +1,101 @@
+:root {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", Tahoma, sans-serif;
+  background: #10131a;
+  color: #f4f7fb;
+}
+
+.wrapper {
+  width: 320px;
+  padding: 12px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.ghost-btn {
+  border: 1px solid #33425a;
+  background: transparent;
+  color: #d7e2f3;
+  border-radius: 8px;
+  font-size: 12px;
+  padding: 5px 8px;
+  cursor: pointer;
+}
+
+.status-card {
+  background: #161d29;
+  border: 1px solid #283244;
+  border-radius: 10px;
+  padding: 9px 10px;
+}
+
+.label {
+  margin: 0 0 4px;
+  font-size: 11px;
+  color: #9eb1cc;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.status-text {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.small-text {
+  margin: 0;
+  font-size: 13px;
+}
+
+.status-on {
+  color: #ff8d8d;
+}
+
+.status-off {
+  color: #8df0bc;
+}
+
+.domain-list {
+  margin: 0;
+  padding-left: 18px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.domain-list li {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.footer {
+  text-align: right;
+}
+
+.footer a {
+  color: #8dc4ff;
+  text-decoration: none;
+  font-size: 12px;
+}
+
+.footer a:hover {
+  text-decoration: underline;
+}

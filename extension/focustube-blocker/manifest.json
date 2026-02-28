@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "FocusTube Timer Blocker",
+  "description": "Blocks selected social sites while FocusTube timer session is active.",
+  "version": "1.0.0",
+  "permissions": [
+    "storage",
+    "declarativeNetRequest",
+    "declarativeNetRequestWithHostAccess"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "FocusTube Blocker",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content-sync.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
