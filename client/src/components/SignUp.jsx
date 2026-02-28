@@ -135,7 +135,7 @@ export default function SignUp() {
               <Input
                 id="phone"
                 type="text"
-                placeholder="+1 555 000 1234"
+                placeholder="+91 9999999999"
                 value={formData.phone}
                 onChange={handleChange}
                 autoComplete="tel"
