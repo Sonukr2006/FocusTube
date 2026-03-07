@@ -25,6 +25,7 @@ function Header() {
               type="search"
               placeholder="Search products, what's in your mind?"
               className="h-10 w-full rounded-md border border-border bg-card pl-10 pr-4 text-sm text-foreground outline-none ring-0 placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+              readOnly
             />
           </div>
         </div>
@@ -34,7 +35,7 @@ function Header() {
             <Menu className="size-4" />
           </Button> */}
           <Button asChild size="icon-sm" variant="ghost" aria-label="Profile">
-            <Link to="/login">
+            <Link to="">
               <UserRound className="size-4" />
             </Link>
             

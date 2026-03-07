@@ -17,6 +17,9 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "./components/ui/avatar";
 import { Link, Outlet, useLocation, useParams } from "react-router";
 import StudyTimer from "./components/StudyTimer";
+
+const FLOATING_TIMER_DEFAULT_WIDTH = 220;
+
 export default function Home({children}) {
   const location = useLocation();
   const { userId } = useParams();
@@ -29,7 +32,9 @@ export default function Home({children}) {
 
   const clampFloatingPosition = (x, y) => {
     const margin = 8;
-    const timerWidth = Math.min(300, window.innerWidth - 32);
+    const timerWidth =
+      floatingTimerRef.current?.offsetWidth ||
+      Math.min(FLOATING_TIMER_DEFAULT_WIDTH, window.innerWidth - 32);
     const timerHeight = floatingTimerRef.current?.offsetHeight || 280;
     const maxX = Math.max(margin, window.innerWidth - timerWidth - margin);
     const maxY = Math.max(margin, window.innerHeight - timerHeight - margin);
@@ -64,7 +69,10 @@ export default function Home({children}) {
   useEffect(() => {
     if (isHomePage || floatingPosition) return;
 
-    const defaultX = Math.max(8, window.innerWidth - Math.min(300, window.innerWidth - 32) - 16);
+    const defaultX = Math.max(
+      8,
+      window.innerWidth - Math.min(FLOATING_TIMER_DEFAULT_WIDTH, window.innerWidth - 32) - 16
+    );
     const defaultY = 64;
     setFloatingPosition(clampFloatingPosition(defaultX, defaultY));
   }, [isHomePage, floatingPosition]);
@@ -118,6 +126,22 @@ export default function Home({children}) {
     return () => window.removeEventListener("resize", handleResize);
   }, [floatingPosition]);
 
+  useEffect(() => {
+    if (isHomePage || !floatingTimerRef.current || typeof ResizeObserver === "undefined") {
+      return undefined;
+    }
+
+    const observer = new ResizeObserver(() => {
+      setFloatingPosition((previous) =>
+        previous ? clampFloatingPosition(previous.x, previous.y) : previous
+      );
+    });
+
+    observer.observe(floatingTimerRef.current);
+
+    return () => observer.disconnect();
+  }, [isHomePage]);
+
   return (
     <SidebarProvider className="min-h-full">
       <AppSidebar className="top-14 h-[calc(100svh-3.5rem)]" />
@@ -160,7 +184,7 @@ export default function Home({children}) {
         {!isHomePage ? (
           <div
             ref={floatingTimerRef}
-            className="fixed z-50 w-[min(200px,calc(100vw-2rem))]"
+            className="fixed z-50 min-w-[180px] w-[min(220px,calc(100vw-2rem))] max-w-[calc(100vw-1rem)] resize overflow-auto dragging-none rounded-md border border-border bg-card shadow-sm "
             style={
               floatingPosition
                 ? {

@@ -149,13 +149,13 @@ const StudyTimer = ({ interactive = true, compact = false }) => {
 
   return (
     <>
-      <Card className="w-full mt-0">
-        <CardHeader className={compact ? "space-y-1 pb-2" : "space-y-1"}>
+      <Card className={`w-full mt-0 ${compact ? "ml-0" : ""}`}>
+        <CardHeader className={compact ? " pb-2" : "space-y-1"}>
           <CardTitle className={compact ? "text-base" : undefined}>Study Timer</CardTitle>
         </CardHeader>
         <CardContent
-          className={`flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between ${
-            compact ? "pt-0" : ""
+          className={`flex flex-col sm:flex-row sm:items-center sm:justify-between ${
+            compact ? "" : ""
           }`}
         >
           <div>
