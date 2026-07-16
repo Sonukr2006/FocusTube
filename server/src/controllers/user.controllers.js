@@ -1,5 +1,6 @@
 import { User } from "../models/user.model.js";
 import mongoose from "mongoose";
+import jwt from "jsonwebtoken";
 
 const ACCESS_COOKIE_OPTIONS = {
   httpOnly: true,
@@ -13,6 +14,12 @@ const REFRESH_COOKIE_OPTIONS = {
   secure: process.env.NODE_ENV === "production",
   sameSite: "lax",
   maxAge: 7 * 24 * 60 * 60 * 1000,
+};
+
+const CLEAR_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax",
 };
 
 const sanitizeUser = (user) => ({
@@ -55,6 +62,21 @@ const issueAuthTokens = async (user) => {
 
   return { accessToken, refreshToken };
 };
+
+const getRefreshTokenFromRequest = (req) => {
+  const cookieToken = req.cookies?.refreshToken;
+  if (cookieToken) return cookieToken;
+
+  const bodyToken = req.body?.refreshToken;
+  if (bodyToken) return bodyToken;
+
+  return "";
+};
+
+const clearAuthCookies = (res) =>
+  res
+    .clearCookie("accessToken", CLEAR_COOKIE_OPTIONS)
+    .clearCookie("refreshToken", CLEAR_COOKIE_OPTIONS);
 
 export const signUpUser = async (req, res) => {
   try {
@@ -168,6 +190,98 @@ export const signInUser = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to sign in",
+      error: error.message,
+    });
+  }
+};
+
+export const refreshAccessToken = async (req, res) => {
+  try {
+    const incomingRefreshToken = getRefreshTokenFromRequest(req);
+
+    if (!incomingRefreshToken) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized: refresh token missing",
+      });
+    }
+
+    let decodedToken;
+    try {
+      decodedToken = jwt.verify(
+        incomingRefreshToken,
+        process.env.REFRESH_TOKEN_SECRET
+      );
+    } catch (error) {
+      clearAuthCookies(res);
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized: invalid or expired refresh token",
+      });
+    }
+
+    const user = await User.findById(decodedToken?.userid);
+    if (!user || !user.refreshToken) {
+      clearAuthCookies(res);
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized: refresh token not recognized",
+      });
+    }
+
+    if (user.refreshToken !== incomingRefreshToken) {
+      clearAuthCookies(res);
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized: refresh token mismatch",
+      });
+    }
+
+    const { accessToken, refreshToken } = await issueAuthTokens(user);
+
+    return res
+      .status(200)
+      .cookie("accessToken", accessToken, ACCESS_COOKIE_OPTIONS)
+      .cookie("refreshToken", refreshToken, REFRESH_COOKIE_OPTIONS)
+      .json({
+        success: true,
+        message: "Session refreshed successfully",
+        data: {
+          user: sanitizeUser(user),
+          accessToken,
+          refreshToken,
+        },
+      });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to refresh session",
+      error: error.message,
+    });
+  }
+};
+
+export const logoutUser = async (req, res) => {
+  try {
+    const incomingRefreshToken = getRefreshTokenFromRequest(req);
+    if (incomingRefreshToken) {
+      const decodedToken = jwt.verify(incomingRefreshToken);
+      if (decodedToken?.userid) {
+        await User.findByIdAndUpdate(decodedToken.userid, {
+          $set: { refreshToken: "" },
+        });
+      }
+    }
+
+    clearAuthCookies(res);
+    return res.status(200).json({
+      success: true,
+      message: "Logged out successfully",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to logout",
       error: error.message,
     });
   }

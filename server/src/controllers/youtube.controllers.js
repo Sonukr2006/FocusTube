@@ -784,6 +784,43 @@ const getPlaylistItems = async (playlistId, apiKey) => {
   return items;
 };
 
+const searchYouTubeVideos = async (query, apiKey, maxResults = 12) => {
+  const safeQuery = sanitizeText(query);
+  if (!safeQuery) {
+    throw new Error("Search query is required");
+  }
+
+  const safeLimit = Math.min(Math.max(Number(maxResults) || 12, 1), 25);
+  const url =
+    `${YT_API_BASE_URL}/search?part=snippet&type=video&videoEmbeddable=true` +
+    `&maxResults=${safeLimit}&q=${encodeURIComponent(safeQuery)}` +
+    `&key=${encodeURIComponent(apiKey)}`;
+
+  const payload = await fetchJson(url);
+  const items = Array.isArray(payload?.items) ? payload.items : [];
+
+  return items
+    .map((item) => {
+      const snippet = item?.snippet || {};
+      const videoId = sanitizeText(item?.id?.videoId || "");
+      if (!videoId) return null;
+
+      return {
+        videoId,
+        title: sanitizeText(snippet?.title || "Untitled video"),
+        description: sanitizeText(snippet?.description || ""),
+        channelTitle: sanitizeText(snippet?.channelTitle || ""),
+        publishedAt: snippet?.publishedAt || "",
+        thumbnailUrl:
+          snippet?.thumbnails?.high?.url ||
+          snippet?.thumbnails?.medium?.url ||
+          snippet?.thumbnails?.default?.url ||
+          "",
+      };
+    })
+    .filter(Boolean);
+};
+
 const getVideoItem = async (videoId, apiKey) => {
   const url =
     `${YT_API_BASE_URL}/videos?part=snippet&id=${encodeURIComponent(videoId)}` +
@@ -865,6 +902,42 @@ export const getPlaylistVideos = async (req, res) => {
       success: false,
       message: "Failed to fetch data from YouTube Data API",
       error: error.message,
+    });
+  }
+};
+
+export const getSearchVideos = async (req, res) => {
+  try {
+    const query = sanitizeText(req.query?.q || req.query?.query || "");
+    const maxResults = req.query?.maxResults || req.query?.limit || 12;
+    const apiKey = process.env.YOUTUBE_API_KEY?.trim();
+
+    if (!query) {
+      return res.status(400).json({
+        success: false,
+        message: "Search query is required",
+      });
+    }
+
+    if (!isUsableApiKey(apiKey)) {
+      return res.status(500).json({
+        success: false,
+        message: "YOUTUBE_API_KEY is missing in server environment",
+      });
+    }
+
+    const videos = await searchYouTubeVideos(query, apiKey, maxResults);
+
+    return res.status(200).json({
+      success: true,
+      query,
+      total: videos.length,
+      videos,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error?.message || "Failed to search YouTube videos",
     });
   }
 };
