@@ -1,6 +1,8 @@
 import { Router } from "express";
 import {
   getUserById,
+  logoutUser,
+  refreshAccessToken,
   signInUser,
   signUpUser,
 } from "../controllers/user.controllers.js";
@@ -10,6 +12,8 @@ const router = Router();
 
 router.post("/signup", signUpUser);
 router.post("/signin", signInUser);
+router.post("/refresh", refreshAccessToken);
+router.post("/logout",verifyJWT, logoutUser);
 router.get("/:userId", verifyJWT, getUserById);
 
 export default router;
