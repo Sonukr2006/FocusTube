@@ -1,5 +1,5 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import { signIn, signUp } from "@/lib/auth";
+import { refreshSession, signIn, signUp } from "@/lib/auth";
 
 const AUTH_USER_KEY = "focustube_user";
 const AUTH_TOKEN_KEY = "focustube_access_token";
@@ -51,6 +51,7 @@ const initialState = {
   accessToken: storedAuth.accessToken,
   isAuthenticated: Boolean(storedAuth.user && storedAuth.accessToken),
   isLoading: false,
+  isRestoring: false,
   error: "",
 };
 
@@ -94,6 +95,28 @@ export const signUpUserThunk = createAsyncThunk(
       };
     } catch (error) {
       return rejectWithValue(error?.message || "Unable to create account");
+    }
+  }
+);
+
+export const restoreSessionThunk = createAsyncThunk(
+  "auth/restore",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await refreshSession();
+      const user = response?.data?.user || null;
+      const accessToken = response?.data?.accessToken || "";
+      if (!user || !accessToken) {
+        return rejectWithValue("Invalid session refresh response");
+      }
+
+      return {
+        user,
+        accessToken,
+        message: response?.message || "Session restored.",
+      };
+    } catch (error) {
+      return rejectWithValue(error?.message || "Unable to restore session");
     }
   }
 );
@@ -146,6 +169,25 @@ const authSlice = createSlice({
       .addCase(signUpUserThunk.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload || "Unable to create account";
+      })
+      .addCase(restoreSessionThunk.pending, (state) => {
+        state.isRestoring = true;
+      })
+      .addCase(restoreSessionThunk.fulfilled, (state, action) => {
+        state.isRestoring = false;
+        state.user = action.payload.user;
+        state.accessToken = action.payload.accessToken;
+        state.isAuthenticated = true;
+        state.error = "";
+        persistAuth(action.payload.user, action.payload.accessToken);
+      })
+      .addCase(restoreSessionThunk.rejected, (state) => {
+        state.isRestoring = false;
+        state.user = null;
+        state.accessToken = "";
+        state.isAuthenticated = false;
+        state.error = "";
+        persistAuth(null, "");
       });
   },
 });
@@ -157,5 +199,6 @@ export const selectCurrentUser = (state) => state.auth.user;
 export const selectIsAuthenticated = (state) => state.auth.isAuthenticated;
 export const selectAuthLoading = (state) => state.auth.isLoading;
 export const selectAuthError = (state) => state.auth.error;
+export const selectAuthRestoring = (state) => state.auth.isRestoring;
 
 export default authSlice.reducer;

@@ -17,6 +17,7 @@ import { Provider } from "react-redux";
 import { store } from "./store";
 import SoftMurmure from "./components/SoftMurmure/SoftMurmure";
 import BotPanel from "./components/bot/BotPanel";
+import YoutubeLike from "./components/YoutubeLike";
 
 const router = createBrowserRouter([
   {
@@ -55,6 +56,14 @@ const router = createBrowserRouter([
           {
             path: "sessions",
             element: <Session />,
+          },
+          {
+            path: "discover",
+            element: <YoutubeLike />,
+          },
+          {
+            path: "session",
+            element: <YoutubeLike />,
           },
           {
             path: "blocker",

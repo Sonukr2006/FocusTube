@@ -46,6 +46,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+app.get("/healthz", (req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
 
 //routes import
 import userRouter from "./routes/user.route.js";

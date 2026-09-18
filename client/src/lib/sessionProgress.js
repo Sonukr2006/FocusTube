@@ -1,4 +1,7 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
+import { refreshSession } from "@/lib/auth";
+
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem("focustube_access_token");
@@ -6,17 +9,33 @@ const getAuthHeaders = () => {
 };
 
 const requestSessionProgress = async (endpoint, options = {}) => {
-  const response = await fetch(`${API_BASE_URL}/sessions${endpoint}`, {
-    credentials: "include",
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...getAuthHeaders(),
-      ...(options.headers || {}),
-    },
-  });
+  const doRequest = async () => {
+    const response = await fetch(`${API_BASE_URL}/sessions${endpoint}`, {
+      credentials: "include",
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeaders(),
+        ...(options.headers || {}),
+      },
+    });
 
-  const data = await response.json().catch(() => ({}));
+    const data = await response.json().catch(() => ({}));
+    return { response, data };
+  };
+
+  let { response, data } = await doRequest();
+  if (response.status === 401) {
+    try {
+      await refreshSession();
+      ({ response, data } = await doRequest());
+    } catch (error) {
+      throw new Error(
+        data?.message || error?.message || "Session progress request failed"
+      );
+    }
+  }
+
   if (!response.ok) {
     throw new Error(data?.message || "Session progress request failed");
   }

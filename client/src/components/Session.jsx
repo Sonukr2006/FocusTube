@@ -14,6 +14,8 @@ import { saveActiveSessionVideo } from "@/lib/activeSessionVideo";
 
 const YT_IFRAME_API_SRC = "https://www.youtube.com/iframe_api";
 const SAVE_INTERVAL_MS = 10000;
+const YOUTUBE_VIDEO_ID_REGEX = /^[\w-]{11}$/;
+const YOUTUBE_PLAYLIST_ID_REGEX = /^(PL|UU|LL|RD|FL|OLAK5uy)[\w-]+$/;
 const RAW_API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api"
 ).replace(/\/$/, "");
@@ -27,6 +29,63 @@ const PLAYER_STATES = {
 };
 
 let ytApiPromise;
+
+function parseYoutubeUrlLikeInput(rawValue) {
+  const input = rawValue.trim();
+  if (!input) return null;
+
+  const candidate = /^https?:\/\//i.test(input) ? input : `https://${input}`;
+
+  let url;
+  try {
+    url = new URL(candidate);
+  } catch {
+    return null;
+  }
+
+  const hostname = url.hostname.replace(/^www\./i, "").toLowerCase();
+  const isYoutubeHost =
+    hostname === "youtu.be" ||
+    hostname === "youtube-nocookie.com" ||
+    hostname.endsWith(".youtube-nocookie.com") ||
+    hostname === "youtube.com" ||
+    hostname.endsWith(".youtube.com");
+
+  if (!isYoutubeHost) return null;
+
+  const pathParts = url.pathname.split("/").filter(Boolean);
+  const firstPath = (pathParts[0] || "").toLowerCase();
+  const secondPath = pathParts[1] || "";
+
+  let videoId = (url.searchParams.get("v") || "").trim();
+  let playlistId = (url.searchParams.get("list") || "").trim();
+
+  if (!videoId) {
+    if (hostname === "youtu.be" && pathParts[0]) {
+      videoId = pathParts[0].trim();
+    } else if (firstPath === "shorts" || firstPath === "live") {
+      videoId = secondPath.trim();
+    } else if (firstPath === "embed") {
+      if (secondPath.toLowerCase() === "videoseries") {
+        playlistId = playlistId || "";
+      } else {
+        videoId = secondPath.trim();
+      }
+    } else if (firstPath === "playlist") {
+      playlistId = playlistId || "";
+    }
+  }
+
+  if (videoId && !YOUTUBE_VIDEO_ID_REGEX.test(videoId)) {
+    videoId = "";
+  }
+  if (playlistId && !YOUTUBE_PLAYLIST_ID_REGEX.test(playlistId)) {
+    playlistId = "";
+  }
+
+  if (!videoId && !playlistId) return null;
+  return { videoId, playlistId };
+}
 
 function parseYoutubeInput(value) {
   const input = value.trim();
@@ -42,25 +101,7 @@ function parseYoutubeInput(value) {
     };
   }
 
-  if (!input.includes("http")) {
-    if (/^(PL|UU|LL|RD|FL|OLAK5uy)[\w-]+$/.test(input)) {
-      return {
-        kind: "playlist",
-        sourceId: input,
-        sessionId: input,
-        normalizedInput: input,
-      };
-    }
-
-    if (/^[\w-]{11}$/.test(input)) {
-      return {
-        kind: "video",
-        sourceId: input,
-        sessionId: `video:${input}`,
-        normalizedInput: input,
-      };
-    }
-
+  if (YOUTUBE_PLAYLIST_ID_REGEX.test(input)) {
     return {
       kind: "playlist",
       sourceId: input,
@@ -69,49 +110,41 @@ function parseYoutubeInput(value) {
     };
   }
 
-  try {
-    const url = new URL(input);
-    const playlistId = url.searchParams.get("list") || "";
-    if (playlistId) {
-      return {
-        kind: "playlist",
-        sourceId: playlistId,
-        sessionId: playlistId,
-        normalizedInput: input,
-      };
-    }
+  if (YOUTUBE_VIDEO_ID_REGEX.test(input)) {
+    return {
+      kind: "video",
+      sourceId: input,
+      sessionId: `video:${input}`,
+      normalizedInput: input,
+    };
+  }
 
-    const videoParamId = url.searchParams.get("v") || "";
-    if (videoParamId) {
-      return {
-        kind: "video",
-        sourceId: videoParamId,
-        sessionId: `video:${videoParamId}`,
-        normalizedInput: input,
-      };
-    }
+  const parsedUrlInput = parseYoutubeUrlLikeInput(input);
+  if (parsedUrlInput?.videoId) {
+    return {
+      kind: "video",
+      sourceId: parsedUrlInput.videoId,
+      sessionId: `video:${parsedUrlInput.videoId}`,
+      normalizedInput: input,
+    };
+  }
 
-    const hostname = url.hostname.replace(/^www\./, "");
-    const pathParts = url.pathname.split("/").filter(Boolean);
-    if (hostname === "youtu.be" && pathParts[0]) {
-      return {
-        kind: "video",
-        sourceId: pathParts[0],
-        sessionId: `video:${pathParts[0]}`,
-        normalizedInput: input,
-      };
-    }
+  if (parsedUrlInput?.playlistId) {
+    return {
+      kind: "playlist",
+      sourceId: parsedUrlInput.playlistId,
+      sessionId: parsedUrlInput.playlistId,
+      normalizedInput: input,
+    };
+  }
 
-    if ((pathParts[0] === "shorts" || pathParts[0] === "embed") && pathParts[1]) {
-      return {
-        kind: "video",
-        sourceId: pathParts[1],
-        sessionId: `video:${pathParts[1]}`,
-        normalizedInput: input,
-      };
-    }
-  } catch {
-    return null;
+  if (!/[:/?]/.test(input)) {
+    return {
+      kind: "playlist",
+      sourceId: input,
+      sessionId: input,
+      normalizedInput: input,
+    };
   }
 
   return null;
@@ -572,6 +605,21 @@ const Session = () => {
       setBackendStartIndex(safeStartIndex);
       setCurrentIndex(safeStartIndex);
     } catch (fetchError) {
+      if (target.kind === "video" && target.sourceId) {
+        setError("");
+        setPlaylistId(target.sessionId);
+        setPlaylistTitle("Single Video");
+        setVideos([
+          {
+            videoId: target.sourceId,
+            title: "Single Video",
+          },
+        ]);
+        setBackendStartIndex(0);
+        setCurrentIndex(0);
+        return;
+      }
+
       setError(fetchError.message || "Failed to load content.");
       setPlaylistId("");
       setPlaylistTitle("");

@@ -24,6 +24,7 @@ import { logoutUser } from "@/store/slices/authSlice";
 import { clearTodosState } from "@/store/slices/todosSlice";
 import { clearSessionState } from "@/store/slices/sessionsSlice";
 import { ACTIVE_SESSION_VIDEO_STORAGE_KEY } from "@/lib/activeSessionVideo";
+import { logoutSession } from "@/lib/auth";
 
 export function AppSidebar({ ...props }) {
   const dispatch = useDispatch();
@@ -32,7 +33,13 @@ export function AppSidebar({ ...props }) {
   const [isLogoutPopupOpen, setIsLogoutPopupOpen] = useState(false);
   const userBasePath = userId ? `/user/${userId}` : "/user";
 
-  const confirmLogout = () => {
+  const confirmLogout = async () => {
+    try {
+      await logoutSession();
+    } catch (error) {
+      console.error("Logout request failed:", error);
+    }
+
     dispatch(clearTodosState());
     dispatch(clearSessionState());
     dispatch(logoutUser());
@@ -59,10 +66,10 @@ export function AppSidebar({ ...props }) {
         title: "Murmure",
         url: `${userBasePath}/soft-murmure`,
       },
-      // {
-      //   title: "Gemestream",
-      //   url: `${userBasePath}/gemestream`,
-      // },
+      {
+        title: "Video Search",
+        url: `${userBasePath}/discover`,
+      },
       {
         title: "Ask ",
         url: `${userBasePath}/bot`,
